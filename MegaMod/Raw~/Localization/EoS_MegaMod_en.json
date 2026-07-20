@@ -1,4 +1,6 @@
 {
+  "$Text": "{0}",
+  "$MEGAMOD_BANK_target_dead": "One moment, my friend...my sources report the target is already deceased. Someone beat you to it. No work, no payment. Allow me to find another name.",
   "$RACKET_BASE_DATA_BREWERY_SM_BASE_DATA_name": "Small Brewery",
   "$RACKET_BASE_DATA_BREWERY_M_BASE_DATA_name": "Medium Brewery",
   "$RACKET_BASE_DATA_BREWERY_LG_BASE_DATA_name": "Large Brewery",

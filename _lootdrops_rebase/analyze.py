@@ -1,7 +1,7 @@
 import re, json, collections
 
 MOD = r"I:\EoS_dev\MegaMod\Raw~\Lua\Scripts\DataSheets\LootDrops.lua"
-VAN = r"F:\Program Files (x86)\Steam\steamapps\common\EmpireOfSin\GameSource_[Custom]\GameData\Lua\Scripts\DataSheets\LootDrops.lua"
+VAN = r"I:\EoS_dev\GameSource_Vanilla\GameData\Lua\Scripts\DataSheets\LootDrops.lua"
 
 def parse(path):
     raw = open(path, 'rb').read().decode('utf-8')
