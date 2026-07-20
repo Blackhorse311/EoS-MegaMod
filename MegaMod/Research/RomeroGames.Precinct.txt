@@ -1,0 +1,127 @@
+using System;
+using System.Collections.Generic;
+using SLua;
+using UnityEngine;
+
+namespace RomeroGames
+{
+	// Token: 0x02000270 RID: 624
+	public class Precinct
+	{
+		// Token: 0x1700045F RID: 1119
+		// (get) Token: 0x06001CE1 RID: 7393 RVA: 0x0007C79B File Offset: 0x0007A99B
+		// (set) Token: 0x06001CE2 RID: 7394 RVA: 0x0007C7A3 File Offset: 0x0007A9A3
+		public int Id { get; private set; }
+
+		// Token: 0x17000460 RID: 1120
+		// (get) Token: 0x06001CE3 RID: 7395 RVA: 0x0007C7AC File Offset: 0x0007A9AC
+		// (set) Token: 0x06001CE4 RID: 7396 RVA: 0x0007C7B4 File Offset: 0x0007A9B4
+		public int Faction { get; set; }
+
+		// Token: 0x17000461 RID: 1121
+		// (get) Token: 0x06001CE5 RID: 7397 RVA: 0x0007C7BD File Offset: 0x0007A9BD
+		// (set) Token: 0x06001CE6 RID: 7398 RVA: 0x0007C7C5 File Offset: 0x0007A9C5
+		public int SpacialIndex { get; set; }
+
+		// Token: 0x17000462 RID: 1122
+		// (get) Token: 0x06001CE7 RID: 7399 RVA: 0x0007C7CE File Offset: 0x0007A9CE
+		// (set) Token: 0x06001CE8 RID: 7400 RVA: 0x0007C7D6 File Offset: 0x0007A9D6
+		public Vector2 CenterPos { get; set; }
+
+		// Token: 0x17000463 RID: 1123
+		// (get) Token: 0x06001CE9 RID: 7401 RVA: 0x0007C7DF File Offset: 0x0007A9DF
+		// (set) Token: 0x06001CEA RID: 7402 RVA: 0x0007C7E7 File Offset: 0x0007A9E7
+		public Location Location { get; private set; }
+
+		// Token: 0x17000464 RID: 1124
+		// (get) Token: 0x06001CEB RID: 7403 RVA: 0x0007C7F0 File Offset: 0x0007A9F0
+		// (set) Token: 0x06001CEC RID: 7404 RVA: 0x0007C7F8 File Offset: 0x0007A9F8
+		public PrecinctInfo PrecinctInfo { get; set; }
+
+		// Token: 0x06001CED RID: 7405 RVA: 0x0007C804 File Offset: 0x0007AA04
+		public Precinct(int id, string precinctDefinitionId, Location location, LuaTable luaPrecinct)
+		{
+			this.Id = id;
+			this.Location = location;
+			this.PrecinctDefinitionId = precinctDefinitionId;
+			this._luaPrecinct = luaPrecinct;
+			this._luaPrecinct["_rgPrecinct"] = this;
+			List<PrecinctBlockDefinition> precinctDefinitionBlocks = location.Template.GetPrecinctDefinition().PrecinctBlocks[this.PrecinctDefinitionId].PrecinctBlocks;
+			this.worldBounds = new Rect[precinctDefinitionBlocks.Count];
+			for (int i = 0; i < precinctDefinitionBlocks.Count; i++)
+			{
+				PrecinctBlockDefinition block = precinctDefinitionBlocks[i];
+				this.worldBounds[i] = new Rect(block.Position, block.Size);
+			}
+			this._onCreateFunction = luaPrecinct.GetFunction("onCreate");
+			this._onLoadFunction = luaPrecinct.GetFunction("onLoad");
+			this._canBeAttackedByFunction = luaPrecinct.GetFunction("canBeAttackedByFactionConfigId");
+		}
+
+		// Token: 0x06001CEE RID: 7406 RVA: 0x0007C8ED File Offset: 0x0007AAED
+		public void OnCreate()
+		{
+			this._onCreateFunction.call(this._luaPrecinct);
+		}
+
+		// Token: 0x06001CEF RID: 7407 RVA: 0x0007C901 File Offset: 0x0007AB01
+		public void OnLoad()
+		{
+			this._onLoadFunction.call(this._luaPrecinct);
+		}
+
+		// Token: 0x06001CF0 RID: 7408 RVA: 0x0007C915 File Offset: 0x0007AB15
+		public int GetNumNeighbors()
+		{
+			return this.Location.LocationPrecinctSpacialData.GetNumPrecinctNeighborsFromSpacialIndex(this.SpacialIndex);
+		}
+
+		// Token: 0x06001CF1 RID: 7409 RVA: 0x0007C92D File Offset: 0x0007AB2D
+		public Precinct GetNeighborPrecinct(int neighborIndex)
+		{
+			return Client.Location.GetPrecinct(this.Location.LocationPrecinctSpacialData.GetPrecinctNeighborFromSpacialIndex(this.SpacialIndex, neighborIndex).precinctId, true);
+		}
+
+		// Token: 0x06001CF2 RID: 7410 RVA: 0x0007C956 File Offset: 0x0007AB56
+		public bool HasNeighbor(Precinct otherPrecinct)
+		{
+			return this.Location.LocationPrecinctSpacialData.HasNeighbor(this.SpacialIndex, otherPrecinct.SpacialIndex);
+		}
+
+		// Token: 0x06001CF3 RID: 7411 RVA: 0x0007C974 File Offset: 0x0007AB74
+		public void AddExteriorAccessLink(Precinct exteriorPrecinct)
+		{
+			this._luaPrecinct.GetFunction("addExteriorAccessLink").call(this._luaPrecinct, exteriorPrecinct._luaPrecinct);
+		}
+
+		// Token: 0x06001CF4 RID: 7412 RVA: 0x0007C998 File Offset: 0x0007AB98
+		public bool CanBeAttackedByFaction(int factionId)
+		{
+			return (bool)this._canBeAttackedByFunction.call(this._luaPrecinct, factionId);
+		}
+
+		// Token: 0x06001CF5 RID: 7413 RVA: 0x0007C9B6 File Offset: 0x0007ABB6
+		public bool CanBeAttackedByPlayer()
+		{
+			return (bool)this._canBeAttackedByFunction.call(this._luaPrecinct, Client.AI.GetPlayerFaction());
+		}
+
+		// Token: 0x04001202 RID: 4610
+		private LuaTable _luaPrecinct;
+
+		// Token: 0x04001203 RID: 4611
+		private LuaFunction _onCreateFunction;
+
+		// Token: 0x04001204 RID: 4612
+		private LuaFunction _onLoadFunction;
+
+		// Token: 0x04001205 RID: 4613
+		private LuaFunction _canBeAttackedByFunction;
+
+		// Token: 0x04001207 RID: 4615
+		public readonly Rect[] worldBounds;
+
+		// Token: 0x0400120B RID: 4619
+		public string PrecinctDefinitionId;
+	}
+}

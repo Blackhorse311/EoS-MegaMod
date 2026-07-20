@@ -1,0 +1,17 @@
+using System;
+using SLua;
+
+namespace RomeroGames
+{
+	// Token: 0x020002C7 RID: 711
+	[CustomLuaClass]
+	public enum BuildingInteriorSize
+	{
+		// Token: 0x040013A7 RID: 5031
+		Small = 1,
+		// Token: 0x040013A8 RID: 5032
+		Medium,
+		// Token: 0x040013A9 RID: 5033
+		Large
+	}
+}

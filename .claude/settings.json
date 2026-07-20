@@ -1,0 +1,48 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Edit",
+      "Write",
+      "Glob",
+      "Grep",
+      "Bash(*)",
+      "WebSearch",
+      "WebFetch",
+      "Agent",
+      "ToolSearch",
+      "TaskCreate",
+      "TaskUpdate",
+      "TaskGet",
+      "TaskList",
+      "NotebookEdit",
+      "Skill",
+      "Workflow"
+    ],
+    "ask": [
+      "Bash(git push*)",
+      "Bash(npm publish*)"
+    ],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(format:*)",
+      "Bash(shutdown:*)",
+      "Bash(reboot:*)",
+      "Bash(del /s /q C:\\*)",
+      "Bash(rd /s /q C:\\*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -File \"$CLAUDE_PROJECT_DIR/.claude/hooks/format-on-edit.ps1\""
+          }
+        ]
+      }
+    ]
+  }
+}
