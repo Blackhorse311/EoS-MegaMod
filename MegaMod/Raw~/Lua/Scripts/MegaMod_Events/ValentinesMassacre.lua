@@ -28,7 +28,7 @@ end
 function sendHitSquad()
     if math.random() < 0.70 then
         -- Success
-        BRScript:PlayerAddCash(2000, "CASH.MISSION_REWARD")
+        BRScript:PlayerAddCash(math.floor(2000 * (fact.MegaModCfgPayout or 1)), "CASH.MISSION_REWARD") -- MEGAMOD CONFIG: payout knob
 
         -- Apply major diplomacy damage to the hostile rival
         local playerFaction = WorldUtils:getPlayerFaction()
@@ -56,14 +56,15 @@ function sendHitSquad()
             if precinct then
                 -- MEGAMOD FIX: raiseGameEvent is only a UI toast; apply REAL heat first
                 -- (vanilla PoliceActivityWatcher order: toast with pre-add value, then add)
+                local heat = math.max(1, math.floor(35 * (fact.MegaModCfgHeat or 1))) -- MEGAMOD CONFIG: heat knob (toast quotes the same figure)
                 Utils:raiseGameEvent("onPoliceActivityEffectApplied",
                     "alertKey", "MEGAMOD_VALM_HEAT",
-                    "appliedPoliceActivity", 35,
+                    "appliedPoliceActivity", heat,
                     "originalValue", precinct:getPoliceActivity(),
                     "effectId", "MEGAMOD_MASSACRE_HEAT",
                     "precinct", precinct,
                     "description", {"$Text", "Valentine's Day Massacre"})
-                precinct:addTemporaryPoliceActivity(35)
+                precinct:addTemporaryPoliceActivity(heat)
             end
         end
 

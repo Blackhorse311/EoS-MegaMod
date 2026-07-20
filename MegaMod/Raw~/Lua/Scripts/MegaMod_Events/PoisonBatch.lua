@@ -50,7 +50,7 @@ function onTrigger()
     title("$MEGAMOD_POISONBATCH_title") --$ The Poisoner's Dram
     text("$MEGAMOD_POISONBATCH_text") --$ Your cellar man comes up pale as a bedsheet with a tin cup in his hand. "Boss, smell this." It smells like a hospital burning down. Somebody sold you a batch cooked off government industrial alcohol -- the stuff Washington's chemists poison on purpose so nobody drinks it -- and whatever rube re-distilled it didn't cook the death out. Papers say ten thousand poor souls have drunk their last off batches like this one. It's mixed in with your good stock, near a sixth of the cellar. What's the play?
     option("$MEGAMOD_POISONBATCH_dump", poisonBatchDump) --$ Pour it in the river (lose the batch)
-    if BRScript:PlayerCanAfford(800) then
+    if BRScript:PlayerCanAfford(math.floor(800 * (fact.MegaModCfgCost or 1))) then -- MEGAMOD CONFIG: cost knob (paired with the charge in poisonBatchChemist)
         option("$MEGAMOD_POISONBATCH_chemist", poisonBatchChemist) --$ Hire a real chemist to re-distill it ($800)
     end
     option("$MEGAMOD_POISONBATCH_sell", poisonBatchSell) --$ Sell it anyway ($1,200)
@@ -74,12 +74,13 @@ function poisonBatchDump()
 end
 
 function poisonBatchChemist()
+    local cost = math.floor(800 * (fact.MegaModCfgCost or 1)) -- MEGAMOD CONFIG: cost knob (check + charge scale together)
     local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction or playerFaction.cash.count < 800 then
+    if not playerFaction or playerFaction.cash.count < cost then
         poisonBatchShowResult("$MEGAMOD_POISONBATCH_broke_title", "$MEGAMOD_POISONBATCH_broke_text") --$ Can't Cover the Fee / The chemist wants eight hundred, cash, before he so much as lights a burner -- and the bankroll won't stretch. He packs his glassware and leaves you alone with the barrels and the smell.
         return
     end
-    BRScript:PlayerSubtractCash(800, "CASH.GENERIC")
+    BRScript:PlayerSubtractCash(cost, "CASH.GENERIC")
 
     if math.random() < 0.75 then
         poisonBatchShowResult("$MEGAMOD_POISONBATCH_chemist_ok_title", "$MEGAMOD_POISONBATCH_chemist_ok_text") --$ Science Prevails / The chemist sets up in your cellar like a priest at an altar -- copper coils, thermometers, little glass bulbs. Two days of careful heat and he hands you a glass. "Clean," he says, and drinks it himself to prove it. The whole batch is saved, every last barrel. Eight hundred well spent. Somewhere, a government chemist is very disappointed.
@@ -107,7 +108,7 @@ function poisonBatchChemist()
 end
 
 function poisonBatchSell()
-    BRScript:PlayerAddCash(1200, "CASH.ITEM_SOLD")
+    BRScript:PlayerAddCash(math.floor(1200 * (fact.MegaModCfgPayout or 1)), "CASH.ITEM_SOLD") -- MEGAMOD CONFIG: payout knob
     -- The bill comes due in 3 days (delayed event queue is save-persisted)
     WorldUtils:scheduleWithDelay("MegaModPoisonBatchFallout", Utils:daysToSecs(3), "TICK")
     poisonBatchShowResult("$MEGAMOD_POISONBATCH_sold_title", "$MEGAMOD_POISONBATCH_sold_text") --$ Sold / You tell the cellar man to cut it thin, label it rye, and move it to joints where nobody asks questions. Twelve hundred dollars finds its way into the till by Friday. The cellar man won't look at you. "It's business," you tell him. He nods the way a man nods when he's already picking out what he'll say to the police.
@@ -143,14 +144,15 @@ function onTrigger()
         end
         if best then
             -- Toast first with pre-add value, then apply (ValentinesMassacre pattern)
+            local heat = math.max(1, math.floor(25 * (fact.MegaModCfgHeat or 1))) -- MEGAMOD CONFIG: heat knob (toast quotes the same figure)
             Utils:raiseGameEvent("onPoliceActivityEffectApplied",
                 "alertKey", "MEGAMOD_POISONBATCH_HEAT",
-                "appliedPoliceActivity", 25,
+                "appliedPoliceActivity", heat,
                 "originalValue", best:getPoliceActivity() or 0,
                 "effectId", "MEGAMOD_POISONBATCH_HEAT",
                 "precinct", best,
                 "description", {"$Text", "Poison Liquor Deaths"})
-            best:addTemporaryPoliceActivity(25)
+            best:addTemporaryPoliceActivity(heat)
         end
     end
 

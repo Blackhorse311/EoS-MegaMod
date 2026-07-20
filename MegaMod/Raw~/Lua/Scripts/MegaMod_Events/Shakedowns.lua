@@ -53,7 +53,7 @@ end
 -- MEGAMOD FIX: result pages must be separate events -- rebuilding this dialog after
 -- complete() released the pooled event, so the result text never displayed.
 function aggressiveShakedown()
-    local cash = math.random(400, 800)
+    local cash = math.floor(math.random(400, 800) * (fact.MegaModCfgPayout or 1)) -- MEGAMOD CONFIG: payout knob
     BRScript:PlayerAddCash(cash, "CASH.MISSION_REWARD")
 
     -- MEGAMOD FIX: "high heat" is now real -- +5 temporary police activity (vanilla cop-kill scale, decays 2/week)
@@ -62,7 +62,7 @@ function aggressiveShakedown()
         local building = playerFaction.buildings[math.random(#playerFaction.buildings)]
         local precinct = building and building:getPrecinct()
         if precinct then
-            precinct:addTemporaryPoliceActivity(5)
+            precinct:addTemporaryPoliceActivity(math.max(1, math.floor(5 * (fact.MegaModCfgHeat or 1)))) -- MEGAMOD CONFIG: heat knob
         end
     end
 
@@ -70,7 +70,7 @@ function aggressiveShakedown()
 end
 
 function subtleShakedown()
-    local cash = math.random(100, 300)
+    local cash = math.floor(math.random(100, 300) * (fact.MegaModCfgPayout or 1)) -- MEGAMOD CONFIG: payout knob
     BRScript:PlayerAddCash(cash, "CASH.MISSION_REWARD")
 
     -- MEGAMOD FIX: "low heat" -- +1 temporary police activity
@@ -79,7 +79,7 @@ function subtleShakedown()
         local building = playerFaction.buildings[math.random(#playerFaction.buildings)]
         local precinct = building and building:getPrecinct()
         if precinct then
-            precinct:addTemporaryPoliceActivity(1)
+            precinct:addTemporaryPoliceActivity(math.max(1, math.floor(1 * (fact.MegaModCfgHeat or 1)))) -- MEGAMOD CONFIG: heat knob
         end
     end
 

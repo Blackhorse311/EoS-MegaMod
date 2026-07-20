@@ -38,7 +38,7 @@ function GameEvent.onMegaModEventPick(e)
             end
         end
     end
-    if not sendable or not BRScript:PlayerCanAfford(250) then
+    if not sendable or not BRScript:PlayerCanAfford(math.floor(250 * (fact.MegaModCfgCost or 1))) then -- MEGAMOD CONFIG: cost knob (paired with the cheapest fare below)
         Utils:raiseGameEvent("onMegaModEventPass", "eventName", "HOT_SPRINGS")
         return
     end

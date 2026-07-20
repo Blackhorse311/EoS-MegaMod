@@ -72,7 +72,7 @@ function GameEvent.onDayBegin(e)
         -- FACTION.THUGS fight: no faction war, no notoriety -- and two captured
         -- Thompsons fenced for a tidy sum
         milafloresSquad = nil
-        BRScript:PlayerAddCash(1800, "CASH.ITEM_SOLD")
+        BRScript:PlayerAddCash(math.floor(1800 * (fact.MegaModCfgPayout or 1)), "CASH.ITEM_SOLD") -- MEGAMOD CONFIG: payout knob
         WorldUtils:triggerEvent("MegaModMilafloresLoot")
     elseif (worldTime - milafloresSquadTime) > Utils:daysToSecs(30) then
         -- The trap went stale; the shooters drift off to find easier work
@@ -97,7 +97,7 @@ function onTrigger()
     title("$MEGAMOD_MILAFLORES_title") --$ Chopper Squad
     text("$MEGAMOD_MILAFLORES_text") --$ A nervous little man who sells racing tips finds you in a back booth and talks with his hat in his hands. "You heard what happened at the Milaflores apartments in Detroit? Three fellas walked into a hallway and a Thompson gun cut 'em down before their hats hit the floor. Well -- two of them choppers just came into town on the evening train, and the fellas carrying 'em have been asking about YOUR crew's habits. Where they drink, when they collect." He wets his lips. "For five hundred I can tell you the route they'll take. Or don't pay me, and, well... hallways is bad places, is all I'm saying."
     option("$MEGAMOD_MILAFLORES_ready", milafloresWalkInReady) --$ Let them come. We'll be ready.
-    if BRScript:PlayerCanAfford(500) then
+    if BRScript:PlayerCanAfford(math.floor(500 * (fact.MegaModCfgCost or 1))) then -- MEGAMOD CONFIG: cost knob (paired with the charge in milafloresPayInformant)
         option("$MEGAMOD_MILAFLORES_pay", milafloresPayInformant) --$ Buy the route ($500)
     end
     option("$MEGAMOD_MILAFLORES_ignore", milafloresIgnore) --$ Beat it, tout. Hallways don't scare me.
@@ -116,12 +116,13 @@ function milafloresWalkInReady()
 end
 
 function milafloresPayInformant()
+    local cost = math.floor(500 * (fact.MegaModCfgCost or 1)) -- MEGAMOD CONFIG: cost knob (check + charge scale together)
     local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction or playerFaction.cash.count < 500 then
+    if not playerFaction or playerFaction.cash.count < cost then
         milafloresShowResult("$MEGAMOD_MILAFLORES_broke_title", "$MEGAMOD_MILAFLORES_broke_text") --$ Empty Pockets / You reach for the bankroll and it isn't there. The tout's face falls like a bad souffle. "No hard feelings, but I don't run a charity." He melts into the crowd, and you're left hoping his story was all smoke.
         return
     end
-    BRScript:PlayerSubtractCash(500, "CASH.INFORMATION")
+    BRScript:PlayerSubtractCash(cost, "CASH.INFORMATION")
     milafloresShowResult("$MEGAMOD_MILAFLORES_paid_title", "$MEGAMOD_MILAFLORES_paid_text") --$ Cheap at the Price / The tout palms the bills and gives you everything: the flop they're sleeping in, the sedan they hired, the alley they picked, and the hour. Your crews change their routes, double up, and take the long way home for a week. The shooters wait two nights in a cold doorway for men who never come, then wire Detroit for train fare. Five hundred dollars, and nobody had to bleed. The tout tips his hat. "Pleasure, boss. I hear things all the time, you know where to find me."
 end
 

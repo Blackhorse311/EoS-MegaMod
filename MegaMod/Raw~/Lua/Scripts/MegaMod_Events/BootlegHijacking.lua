@@ -86,13 +86,14 @@ function showHijackResult(titleKey, textKey)
 end
 
 function smallAmbush()
+    local cost = math.floor(300 * (fact.MegaModCfgCost or 1)) -- MEGAMOD CONFIG: cost knob (check + charge scale together)
     local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction or playerFaction.cash.count < 300 then
+    if not playerFaction or playerFaction.cash.count < cost then
         showHijackResult("$MEGAMOD_HIJACK_broke_title", "$MEGAMOD_HIJACK_broke_text") --$ Can't Afford It / You can't scrape together enough cash to outfit even a small crew for the hit. The convoy rolls right past while you watch from the curb.
         return
     end
 
-    BRScript:PlayerSubtractCash(300, "CASH.HIJACK_OPS")
+    BRScript:PlayerSubtractCash(cost, "CASH.HIJACK_OPS")
 
     -- 60% success
     if math.random() < 0.60 then
@@ -108,13 +109,14 @@ function smallAmbush()
 end
 
 function bigAmbush()
+    local cost = math.floor(600 * (fact.MegaModCfgCost or 1)) -- MEGAMOD CONFIG: cost knob (check + charge scale together)
     local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction or playerFaction.cash.count < 600 then
+    if not playerFaction or playerFaction.cash.count < cost then
         showHijackResult("$MEGAMOD_HIJACK_broke_title", "$MEGAMOD_HIJACK_broke_text") --$ Can't Afford It
         return
     end
 
-    BRScript:PlayerSubtractCash(600, "CASH.HIJACK_OPS")
+    BRScript:PlayerSubtractCash(cost, "CASH.HIJACK_OPS")
 
     -- 80% success
     if math.random() < 0.80 then

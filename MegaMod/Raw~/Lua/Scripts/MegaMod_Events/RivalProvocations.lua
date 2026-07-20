@@ -111,13 +111,14 @@ function getProvocationRival()
 end
 
 function retaliateOption()
+    local cost = math.floor(500 * (fact.MegaModCfgCost or 1)) -- MEGAMOD CONFIG: cost knob (check + charge scale together)
     local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction or playerFaction.cash.count < 500 then
+    if not playerFaction or playerFaction.cash.count < cost then
         showProvocResult("$MEGAMOD_PROVOC_broke_title", "$MEGAMOD_PROVOC_broke_text") --$ Can't Afford It / You don't have $500 to fund a proper retaliation. Your boys look at you, waiting. Sometimes the wallet decides for you.
         return
     end
 
-    BRScript:PlayerSubtractCash(500, "CASH.RETALIATION")
+    BRScript:PlayerSubtractCash(cost, "CASH.RETALIATION")
 
     -- MEGAMOD FIX: MOLE_DISCOVERED is a morale config, not a rating effect; AGGRESSIVE_BEHAVIOUR
     -- is the verified RatingEffects id for hitting back with violence

@@ -25,7 +25,7 @@ function GameEvent.onMegaModEventPick(e)
 
     -- Must at least be able to afford the half order
     local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction or not BRScript:PlayerCanAfford(1600) then
+    if not playerFaction or not BRScript:PlayerCanAfford(math.floor(1600 * (fact.MegaModCfgCost or 1))) then -- MEGAMOD CONFIG: cost knob (paired with the half-order charge)
         Utils:raiseGameEvent("onMegaModEventPass", "eventName", "SEAGRAM_RUN")
         return
     end
@@ -49,7 +49,7 @@ function onTrigger()
     setModal(true)
     title("$MEGAMOD_SEAGRAM_title") --$ The Bronfman Special
     text("$MEGAMOD_SEAGRAM_text") --$ The man who calls on you wears a banker's suit and carries a leather portfolio instead of a heater. He represents "certain distilling interests" in Canada -- the Bronfman family's operation, the biggest legal whisky business on the continent. "Our product is exported in full compliance with Canadian law," he says, laying out papers stamped for Havana. "Where the boats turn after Windsor is, of course, their own affair." No hijackings, no cutters, no bathtub swill: bonded Canadian rye, aged in oak, delivered in three days like clockwork. The price is steep because the product is real. That's the whole catch.
-    if BRScript:PlayerCanAfford(3000) then
+    if BRScript:PlayerCanAfford(math.floor(3000 * (fact.MegaModCfgCost or 1))) then -- MEGAMOD CONFIG: cost knob (paired with the charge in seagramBuyFull)
         option("$MEGAMOD_SEAGRAM_full", seagramBuyFull) --$ The full order ($3,000)
     end
     option("$MEGAMOD_SEAGRAM_half", seagramBuyHalf) --$ A half order ($1,600)
@@ -63,23 +63,25 @@ function seagramShowResult(titleKey, textKey)
 end
 
 function seagramBuyFull()
+    local cost = math.floor(3000 * (fact.MegaModCfgCost or 1)) -- MEGAMOD CONFIG: cost knob (check + charge scale together)
     local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction or playerFaction.cash.count < 3000 then
+    if not playerFaction or playerFaction.cash.count < cost then
         seagramShowResult("$MEGAMOD_SEAGRAM_broke_title", "$MEGAMOD_SEAGRAM_broke_text") --$ Insufficient Funds / The broker glances at the bankroll and closes his portfolio with a soft click. "Perhaps when your circumstances improve." He leaves a card with no name on it, only a Montreal exchange.
         return
     end
-    BRScript:PlayerSubtractCash(3000, "CASH.TRADE")
+    BRScript:PlayerSubtractCash(cost, "CASH.TRADE")
     WorldUtils:scheduleWithDelay("MegaModSeagramDelivery", Utils:daysToSecs(3), "TICK", "seagramFullOrder", true)
     seagramShowResult("$MEGAMOD_SEAGRAM_ordered_title", "$MEGAMOD_SEAGRAM_ordered_text") --$ Order Placed / The broker writes out a receipt in a neat clerk's hand -- an honest-to-goodness receipt, like you'd bought a davenport. "Three days. The freight crosses at Windsor, comes down by rail as 'machine parts,' and is trucked to your door." He shakes your hand like a banker closing a mortgage. It's the most respectable crime you've ever committed.
 end
 
 function seagramBuyHalf()
+    local cost = math.floor(1600 * (fact.MegaModCfgCost or 1)) -- MEGAMOD CONFIG: cost knob (check + charge scale together)
     local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction or playerFaction.cash.count < 1600 then
+    if not playerFaction or playerFaction.cash.count < cost then
         seagramShowResult("$MEGAMOD_SEAGRAM_broke_title", "$MEGAMOD_SEAGRAM_broke_text")
         return
     end
-    BRScript:PlayerSubtractCash(1600, "CASH.TRADE")
+    BRScript:PlayerSubtractCash(cost, "CASH.TRADE")
     WorldUtils:scheduleWithDelay("MegaModSeagramDelivery", Utils:daysToSecs(3), "TICK", "seagramFullOrder", false)
     seagramShowResult("$MEGAMOD_SEAGRAM_ordered_title", "$MEGAMOD_SEAGRAM_ordered_text")
 end

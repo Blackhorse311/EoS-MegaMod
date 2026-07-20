@@ -25,7 +25,7 @@ function GameEvent.onMegaModEventPick(e)
 
     -- Must at least be able to afford the half share for the pitch to make sense
     local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction or not BRScript:PlayerCanAfford(1200) then
+    if not playerFaction or not BRScript:PlayerCanAfford(math.floor(1200 * (fact.MegaModCfgCost or 1))) then -- MEGAMOD CONFIG: cost knob (paired with the half-share charge)
         Utils:raiseGameEvent("onMegaModEventPass", "eventName", "RUM_ROW")
         return
     end
@@ -50,7 +50,7 @@ function onTrigger()
     title("$MEGAMOD_RUMROW_title") --$ The Real McCoy
     text("$MEGAMOD_RUMROW_text") --$ A sunburned character in a pea coat finds you at the bar and talks low. Says he books freight for Bill McCoy -- THE McCoy, the skipper who anchors his schooner out past the three-mile limit where the law can't lay a finger on him. "Every bottle straight off the boat. Never cut, never watered, never touched. The real McCoy, friend -- that's where the sayin' comes from. We ran a load down through the Lakes and it's sitting in a boathouse as we speak. Cash on the barrelhead, and it's yours in two days."
     -- Only show what the bankroll can cover (FedRaids conditional-option pattern)
-    if BRScript:PlayerCanAfford(2500) then
+    if BRScript:PlayerCanAfford(math.floor(2500 * (fact.MegaModCfgCost or 1))) then -- MEGAMOD CONFIG: cost knob (paired with the charge in rumRowBuyFull)
         option("$MEGAMOD_RUMROW_full", rumRowBuyFull) --$ Buy the whole lot ($2,500)
     end
     option("$MEGAMOD_RUMROW_half", rumRowBuyHalf) --$ Take a half share ($1,200)
@@ -64,24 +64,26 @@ function rumRowShowResult(titleKey, textKey)
 end
 
 function rumRowBuyFull()
+    local cost = math.floor(2500 * (fact.MegaModCfgCost or 1)) -- MEGAMOD CONFIG: cost knob (check + charge scale together)
     local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction or playerFaction.cash.count < 2500 then
+    if not playerFaction or playerFaction.cash.count < cost then
         rumRowShowResult("$MEGAMOD_RUMROW_broke_title", "$MEGAMOD_RUMROW_broke_text") --$ Light in the Pocket / You count out the roll and come up short. The agent sniffs, buttons his coat, and heads for the door. "McCoy don't do credit, friend. Nothing personal."
         return
     end
-    BRScript:PlayerSubtractCash(2500, "CASH.TRADE")
+    BRScript:PlayerSubtractCash(cost, "CASH.TRADE")
     -- Seizure roll happens on delivery day; pass the lot size to the delivery event
     WorldUtils:scheduleWithDelay("MegaModRumRowDelivery", Utils:daysToSecs(2), "TICK", "rumRowHalfLot", false)
     rumRowShowResult("$MEGAMOD_RUMROW_deal_title", "$MEGAMOD_RUMROW_deal_text") --$ Cash on the Barrelhead / The agent thumbs through the bills once, nods, and makes them disappear into his coat. "Smart money. The boys will run it in by night boat -- two days, no lights, no noise. Keep a warehouse door open." He tips his cap and is gone before the ice melts in your glass.
 end
 
 function rumRowBuyHalf()
+    local cost = math.floor(1200 * (fact.MegaModCfgCost or 1)) -- MEGAMOD CONFIG: cost knob (check + charge scale together)
     local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction or playerFaction.cash.count < 1200 then
+    if not playerFaction or playerFaction.cash.count < cost then
         rumRowShowResult("$MEGAMOD_RUMROW_broke_title", "$MEGAMOD_RUMROW_broke_text")
         return
     end
-    BRScript:PlayerSubtractCash(1200, "CASH.TRADE")
+    BRScript:PlayerSubtractCash(cost, "CASH.TRADE")
     WorldUtils:scheduleWithDelay("MegaModRumRowDelivery", Utils:daysToSecs(2), "TICK", "rumRowHalfLot", true)
     rumRowShowResult("$MEGAMOD_RUMROW_deal_title", "$MEGAMOD_RUMROW_deal_text")
 end
@@ -118,13 +120,15 @@ function onTrigger()
         text({"$MEGAMOD_RUMROW_landed_text", amount}) --$ The night boat came in quiet as a church. Your boys rolled {0} barrels of the good stuff into the warehouse before sunup -- top-shelf liquor, never cut, never watered. One taste and there's no arguing: that's the real McCoy. Your joints will be pouring the best hooch in Chicago this week.
     else
         -- Seized: partial refund, small heat
-        local refund = rumRowHalfLot and 500 or 1000
+        -- MEGAMOD CONFIG: refund scales with the COST knob (it returns a slice of the
+        -- scaled purchase price, so the refund fraction stays constant), not Payout
+        local refund = math.floor((rumRowHalfLot and 500 or 1000) * (fact.MegaModCfgCost or 1))
         BRScript:PlayerAddCash(refund, "CASH.TRADE")
         if playerFaction and playerFaction.buildings and #playerFaction.buildings > 0 then
             local building = playerFaction.buildings[math.random(#playerFaction.buildings)]
             local precinct = building and building:getPrecinct()
             if precinct then
-                precinct:addTemporaryPoliceActivity(5) -- small heat; decays over time
+                precinct:addTemporaryPoliceActivity(math.max(1, math.floor(5 * (fact.MegaModCfgHeat or 1)))) -- small heat; decays over time -- MEGAMOD CONFIG: heat knob
             end
         end
         title("$MEGAMOD_RUMROW_seized_title") --$ The Cutter Got 'Em

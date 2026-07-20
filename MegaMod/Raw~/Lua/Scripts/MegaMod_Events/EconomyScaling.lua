@@ -63,19 +63,21 @@ function GameEvent.onWeekBegin(e)
     end
 
     -- Show warning on tier transition (plus a one-time heat pulse)
+    -- MEGAMOD CONFIG: heat knob scales the pulses and the weekly pressure below
+    local heatMult = fact.MegaModCfgHeat or 1
     if newTier >= 1 and not tier1Warned and buildingCount >= TIER_1_THRESHOLD then
         tier1Warned = true
-        addHeatToPlayerPrecincts(3)
+        addHeatToPlayerPrecincts(math.max(1, math.floor(3 * heatMult)))
         WorldUtils:scheduleWithDelay("MegaModScalingTier1", 5, "TICK")
     end
     if newTier >= 2 and not tier2Warned and buildingCount >= TIER_2_THRESHOLD then
         tier2Warned = true
-        addHeatToPlayerPrecincts(6)
+        addHeatToPlayerPrecincts(math.max(1, math.floor(6 * heatMult)))
         WorldUtils:scheduleWithDelay("MegaModScalingTier2", 5, "TICK")
     end
     if newTier >= 3 and not tier3Warned and buildingCount >= TIER_3_THRESHOLD then
         tier3Warned = true
-        addHeatToPlayerPrecincts(9)
+        addHeatToPlayerPrecincts(math.max(1, math.floor(9 * heatMult)))
         WorldUtils:scheduleWithDelay("MegaModScalingTier3", 5, "TICK")
     end
 
@@ -83,11 +85,11 @@ function GameEvent.onWeekBegin(e)
 
     -- Weekly pressure while at tier 1+
     if currentTier >= 1 then
-        local overhead = 250 * currentTier
+        local overhead = math.floor(250 * currentTier * (fact.MegaModCfgCost or 1)) -- MEGAMOD CONFIG: cost knob (check + charge scale together)
         if playerFaction.cash.count >= overhead then
             BRScript:PlayerSubtractCash(overhead, "CASH.BRIBE")
         end
-        addHeatToPlayerPrecincts(2)
+        addHeatToPlayerPrecincts(math.max(1, math.floor(2 * heatMult)))
     end
 end
 

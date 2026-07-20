@@ -30,8 +30,9 @@ function onTrigger()
 end
 
 function investInFix()
+    local cost = math.floor(2000 * (fact.MegaModCfgCost or 1)) -- MEGAMOD CONFIG: cost knob (check + charge scale together; monitor gate matches)
     local playerFaction = WorldUtils:getPlayerFaction()
-    if playerFaction.cash.count < 2000 then
+    if playerFaction.cash.count < cost then
         title("$MEGAMOD_BSOX_pitch_broke_title") --$ Short on Cash
         text("$MEGAMOD_BSOX_pitch_broke_text") --$ You reach for the bankroll but it's lighter than expected. Silk notices and tips his hat. "Maybe next time, boss." He's gone before you can respond.
         option("$MEGAMOD_BSOX_dismiss") --$ Next time.
@@ -39,7 +40,7 @@ function investInFix()
         return
     end
 
-    BRScript:PlayerSubtractCash(2000, "CASH.INVESTMENT")
+    BRScript:PlayerSubtractCash(cost, "CASH.INVESTMENT")
     fact.MegaModBlackSoxStage = 2
 
     title("$MEGAMOD_BSOX_pitch_invested_title") --$ Money Down
@@ -69,7 +70,7 @@ _category = "Misc"
 function canTrigger() return true end
 
 function onTrigger()
-    BRScript:PlayerAddCash(4000, "CASH.MISSION_REWARD")
+    BRScript:PlayerAddCash(math.floor(4000 * (fact.MegaModCfgPayout or 1)), "CASH.MISSION_REWARD") -- MEGAMOD CONFIG: payout knob
     fact.MegaModBlackSoxStage = 3
 
     setModal(true)
@@ -100,8 +101,9 @@ function onTrigger()
 end
 
 function goBig()
+    local cost = math.floor(5000 * (fact.MegaModCfgCost or 1)) -- MEGAMOD CONFIG: cost knob (check + charge scale together)
     local playerFaction = WorldUtils:getPlayerFaction()
-    if playerFaction.cash.count < 5000 then
+    if playerFaction.cash.count < cost then
         title("$MEGAMOD_BSOX_final_broke_title") --$ Can't Cover It
         text("$MEGAMOD_BSOX_final_broke_text") --$ You don't have $5000 to put up. Silk shrugs. "No hard feelings, boss. Can't play if you can't pay." He tips his hat and disappears. The boxing fix is over.
         option("$MEGAMOD_BSOX_dismiss") --$ Damn.
@@ -109,11 +111,11 @@ function goBig()
         return
     end
 
-    BRScript:PlayerSubtractCash(5000, "CASH.INVESTMENT")
+    BRScript:PlayerSubtractCash(cost, "CASH.INVESTMENT")
 
     if math.random() < 0.60 then
         -- Success: big payout
-        BRScript:PlayerAddCash(12000, "CASH.MISSION_REWARD")
+        BRScript:PlayerAddCash(math.floor(12000 * (fact.MegaModCfgPayout or 1)), "CASH.MISSION_REWARD") -- MEGAMOD CONFIG: payout knob
         fact.MegaModBlackSoxStage = 4
 
         title("$MEGAMOD_BSOX_final_win_title") --$ The Big Score
@@ -137,10 +139,11 @@ function goBig()
                 heatPrecinct = playerFaction.buildings[1]:getPrecinct()
             end
             if heatPrecinct then
-                heatPrecinct:addTemporaryPoliceActivity(25)
+                local heat = math.max(1, math.floor(25 * (fact.MegaModCfgHeat or 1))) -- MEGAMOD CONFIG: heat knob (toast quotes the same figure)
+                heatPrecinct:addTemporaryPoliceActivity(heat)
                 Utils:raiseGameEvent("onPoliceActivityEffectApplied",
                     "alertKey", "MEGAMOD_BSOX_HEAT",
-                    "appliedPoliceActivity", 25,
+                    "appliedPoliceActivity", heat,
                     "originalValue", heatPrecinct:getPoliceActivity() or 0,
                     "effectId", "MEGAMOD_BLACKSOX_HEAT",
                     "precinct", heatPrecinct,
@@ -222,8 +225,8 @@ function GameEvent.onMegaModEventPick(e)
         return
     end
 
-    -- Require $2000+
-    if not playerFaction.cash or playerFaction.cash.count < 2000 then
+    -- Require enough for the pitch's investment (MEGAMOD CONFIG: gate scales with the cost knob so the pitch stays affordable)
+    if not playerFaction.cash or playerFaction.cash.count < math.floor(2000 * (fact.MegaModCfgCost or 1)) then
         Utils:raiseGameEvent("onMegaModEventPass", "eventName", "BLACK_SOX")
         return
     end

@@ -86,10 +86,11 @@ end
 -- MEGAMOD FIX: content set inside option callbacks never renders (engine completes the
 -- event first), so outcomes use Utils:alertDialog; bribe/defection now have real effects
 function tryBribe()
+    local cost = math.floor(200 * (fact.MegaModCfgCost or 1)) -- MEGAMOD CONFIG: cost knob (check + charge scale together)
     local playerFaction = WorldUtils:getPlayerFaction()
     local rpc = getDefector()
-    if playerFaction.cash.count >= 200 then
-        BRScript:PlayerSubtractCash(200, "CASH.LOYALTY_BRIBE")
+    if playerFaction.cash.count >= cost then
+        BRScript:PlayerSubtractCash(cost, "CASH.LOYALTY_BRIBE")
         if rpc then
             rpc.loyalty:add(25, "$MEGAMOD_LOYAL_DEFECT_bribed_title")
         end
@@ -139,7 +140,7 @@ function onTrigger()
 end
 
 function bonusCash()
-    local cash = math.random(150, 300)
+    local cash = math.floor(math.random(150, 300) * (fact.MegaModCfgPayout or 1)) -- MEGAMOD CONFIG: payout knob
     BRScript:PlayerAddCash(cash, "CASH.LOYALTY_TRIBUTE")
     Utils:alertDialog({
         title = "$MEGAMOD_LOYAL_BONUS_cash_title", --$ Tribute Received

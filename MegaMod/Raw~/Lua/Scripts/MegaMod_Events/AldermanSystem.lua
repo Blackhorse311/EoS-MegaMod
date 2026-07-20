@@ -111,7 +111,7 @@ end
 function processUpkeep(playerFaction)
     if aldermanCount <= 0 then return end
 
-    local totalUpkeep = aldermanCount * ALDERMAN_UPKEEP
+    local totalUpkeep = math.floor(aldermanCount * ALDERMAN_UPKEEP * (fact.MegaModCfgCost or 1)) -- MEGAMOD CONFIG: cost knob (check + charge scale together)
     if playerFaction.cash.count >= totalUpkeep then
         BRScript:PlayerSubtractCash(totalUpkeep, "CASH.ALDERMAN_UPKEEP")
     else
@@ -209,15 +209,16 @@ function onTrigger()
 end
 
 function buyAlderman()
+    local cost = math.floor(ALDERMAN_COST * (fact.MegaModCfgCost or 1)) -- MEGAMOD CONFIG: cost knob (check + charge scale together)
     local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction or playerFaction.cash.count < ALDERMAN_COST then
+    if not playerFaction or playerFaction.cash.count < cost then
         title("$MEGAMOD_ALDER_broke_title") --$ Can't Afford It
         text("$MEGAMOD_ALDER_broke_text") --$ You don't have $1000 to grease the alderman's palm. He shrugs and says he'll find someone else who appreciates the value of political friendship.
         option("$MEGAMOD_ALDER_dismiss") --$ Noted.
         return
     end
 
-    BRScript:PlayerSubtractCash(ALDERMAN_COST, "CASH.ALDERMAN_PURCHASE")
+    BRScript:PlayerSubtractCash(cost, "CASH.ALDERMAN_PURCHASE")
     Utils:raiseGameEvent("onMegaModAldermanBought", "precinctId", offerPrecinctId)
 
     -- Apply the police reduction immediately (the monitor keeps it topped up weekly)
@@ -282,8 +283,9 @@ function onTrigger()
 end
 
 function matchBuyout()
+    local cost = math.floor(BUYOUT_MATCH_COST * (fact.MegaModCfgCost or 1)) -- MEGAMOD CONFIG: cost knob (check + charge scale together)
     local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction or playerFaction.cash.count < BUYOUT_MATCH_COST then
+    if not playerFaction or playerFaction.cash.count < cost then
         title("$MEGAMOD_ALDER_buyout_broke_title") --$ Can't Match It
         text("$MEGAMOD_ALDER_buyout_broke_text") --$ You don't have the $500 to keep the alderman loyal. He tips his hat and walks to the other side. Your police protection in the precinct is gone.
         option("$MEGAMOD_ALDER_dismiss") --$ Damn.
@@ -291,7 +293,7 @@ function matchBuyout()
         return
     end
 
-    BRScript:PlayerSubtractCash(BUYOUT_MATCH_COST, "CASH.ALDERMAN_RETENTION")
+    BRScript:PlayerSubtractCash(cost, "CASH.ALDERMAN_RETENTION")
     title("$MEGAMOD_ALDER_buyout_kept_title") --$ Alderman Retained
     text("$MEGAMOD_ALDER_buyout_kept_text") --$ You slide the alderman an extra $500 and remind him who butters his bread. He pockets the cash and makes a phone call. "Tell them I'm not available." Your precinct protection stays intact, but these little loyalty tests are getting expensive.
     option("$MEGAMOD_ALDER_dismiss") --$ Stay bought, pal.

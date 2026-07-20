@@ -69,7 +69,7 @@ function GameEvent.onDayBegin(e)
     if MissionUtils:isSquadDead(purpleGangSquad) then
         -- FACTION.THUGS fight: no faction war, no notoriety -- just their bankroll
         purpleGangSquad = nil
-        BRScript:PlayerAddCash(800, "CASH.LOOT")
+        BRScript:PlayerAddCash(math.floor(800 * (fact.MegaModCfgPayout or 1)), "CASH.LOOT") -- MEGAMOD CONFIG: payout knob
         WorldUtils:triggerEvent("MegaModPurpleGangLoot")
     elseif (worldTime - purpleGangSquadTime) > Utils:daysToSecs(30) then
         -- Nobody took the bait; the torpedoes get bored and catch a train home
@@ -93,7 +93,7 @@ function onTrigger()
     setModal(true)
     title("$MEGAMOD_PURPLEGANG_title") --$ Purple Reign
     text("$MEGAMOD_PURPLEGANG_text") --$ Two men in good coats walk into your office like they own the deed. The talker introduces himself as a friend of the Bernstein brothers -- the Purple Gang, out of Detroit. "Every drop of Old Log Cabin that crosses the river comes through us. The Little Jewish Navy runs it over, we move it, and smart operators buy it. Capone buys from us 'stead of fighting us, and Capone ain't a man who scares easy. Fifteen hundred buys you in: three weeks, three deliveries, the best Canadian whiskey money can float." He smiles with all his teeth. "And fellas who buy from us don't get hijacked. Funny how that works."
-    if BRScript:PlayerCanAfford(1500) then
+    if BRScript:PlayerCanAfford(math.floor(1500 * (fact.MegaModCfgCost or 1))) then -- MEGAMOD CONFIG: cost knob (paired with the charge in purpleGangSign)
         option("$MEGAMOD_PURPLEGANG_sign", purpleGangSign) --$ Sign on ($1,500)
     end
     option("$MEGAMOD_PURPLEGANG_refuse", purpleGangRefuse) --$ Decline, politely
@@ -107,12 +107,13 @@ function purpleGangShowResult(titleKey, textKey)
 end
 
 function purpleGangSign()
+    local cost = math.floor(1500 * (fact.MegaModCfgCost or 1)) -- MEGAMOD CONFIG: cost knob (check + charge scale together)
     local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction or playerFaction.cash.count < 1500 then
+    if not playerFaction or playerFaction.cash.count < cost then
         purpleGangShowResult("$MEGAMOD_PURPLEGANG_broke_title", "$MEGAMOD_PURPLEGANG_broke_text") --$ Short Count / You come up light, and the talker's smile goes thin while his partner counts the ceiling tiles. "Tell you what -- we'll come back when you're a serious operation." They leave without shaking hands.
         return
     end
-    BRScript:PlayerSubtractCash(1500, "CASH.TRADE")
+    BRScript:PlayerSubtractCash(cost, "CASH.TRADE")
     WorldUtils:scheduleWithDelay("MegaModPurpleGangDelivery", Utils:daysToSecs(7), "TICK", "purpleDeliveriesLeft", 3)
     purpleGangShowResult("$MEGAMOD_PURPLEGANG_signed_title", "$MEGAMOD_PURPLEGANG_signed_text") --$ Deal Inked / The talker folds your money away like it was always his. "Pleasure doing business. First truck's a week out -- Old Log Cabin, right off the river, still smelling of Canada." At the door he pauses. "You just bought more than whiskey, friend. You bought peace of mind." You almost believe him.
 end

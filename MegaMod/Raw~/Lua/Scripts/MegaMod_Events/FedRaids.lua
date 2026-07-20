@@ -54,7 +54,7 @@ function onTrigger()
     text("$MEGAMOD_FED_RAID_text") --$ Word on the street is the Bureau of Prohibition has your operations in their sights. A reliable source says they're planning a raid on your biggest earner. You've got a narrow window to act.
     -- MEGAMOD FIX: only offer the bribe when affordable (vanilla RIGGED_TABLES_CAUGHT pattern);
     -- this also fixes the old bribe path which never completed the event (leak)
-    if BRScript:PlayerCanAfford(500) then
+    if BRScript:PlayerCanAfford(math.floor(500 * (fact.MegaModCfgCost or 1))) then -- MEGAMOD CONFIG: cost knob (paired with the charge in bribeFeds)
         option("$MEGAMOD_FED_RAID_bribe", bribeFeds) --$ Grease some palms ($500)
     end
     option("$MEGAMOD_FED_RAID_hide", hideGoods) --$ Hide the good stuff (lose some alcohol)
@@ -62,7 +62,7 @@ function onTrigger()
 end
 
 function bribeFeds()
-    BRScript:PlayerSubtractCash(500, "CASH.BRIBE")
+    BRScript:PlayerSubtractCash(math.floor(500 * (fact.MegaModCfgCost or 1)), "CASH.BRIBE") -- MEGAMOD CONFIG: cost knob (paired with the option gate above)
     WorldUtils:triggerEvent("MegaModFedRaidBribed")
 end
 
@@ -88,7 +88,7 @@ function letThemCome()
         local building = playerFaction.buildings[math.random(#playerFaction.buildings)]
         local precinct = building and building:getPrecinct()
         if precinct then
-            precinct:addTemporaryPoliceActivity(15) -- 3x a cop killing; decays 2/week
+            precinct:addTemporaryPoliceActivity(math.max(1, math.floor(15 * (fact.MegaModCfgHeat or 1)))) -- 3x a cop killing; decays 2/week -- MEGAMOD CONFIG: heat knob
         end
     end
     WorldUtils:triggerEvent("MegaModFedRaidRaided")

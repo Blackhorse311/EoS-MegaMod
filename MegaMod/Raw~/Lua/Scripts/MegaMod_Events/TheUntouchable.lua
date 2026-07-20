@@ -63,10 +63,11 @@ function onTrigger()
 
         if bestPrecinct then
             -- MEGAMOD FIX: real precinct heat (the game event below is only the UI toast)
-            bestPrecinct:addTemporaryPoliceActivity(20)
+            local heat = math.max(1, math.floor(20 * (fact.MegaModCfgHeat or 1))) -- MEGAMOD CONFIG: heat knob (toast quotes the same figure)
+            bestPrecinct:addTemporaryPoliceActivity(heat)
             Utils:raiseGameEvent("onPoliceActivityEffectApplied",
                 "alertKey", "MEGAMOD_UNTCH_PRESSURE",
-                "appliedPoliceActivity", 20,
+                "appliedPoliceActivity", heat,
                 "originalValue", bestPrecinct:getPoliceActivity() or 0,
                 "effectId", "MEGAMOD_UNTOUCHABLE_PRESSURE",
                 "precinct", bestPrecinct,
@@ -102,8 +103,9 @@ function onTrigger()
 end
 
 function digUpDirt()
+    local cost = math.floor(1500 * (fact.MegaModCfgCost or 1)) -- MEGAMOD CONFIG: cost knob (check + charge scale together)
     local playerFaction = WorldUtils:getPlayerFaction()
-    if playerFaction.cash.count < 1500 then
+    if playerFaction.cash.count < cost then
         title("$MEGAMOD_UNTCH_dirt_broke_title") --$ Can't Afford It
         text("$MEGAMOD_UNTCH_dirt_broke_text") --$ You don't have $1500 to throw at private investigators and informants. The Untouchable keeps doing his thing, and you're left hoping for the best.
         option("$MEGAMOD_UNTCH_dismiss") --$ Damn.
@@ -111,7 +113,7 @@ function digUpDirt()
         return
     end
 
-    BRScript:PlayerSubtractCash(1500, "CASH.INVESTIGATION")
+    BRScript:PlayerSubtractCash(cost, "CASH.INVESTIGATION")
 
     if math.random() < 0.50 then
         -- Success: found skeletons
@@ -133,7 +135,7 @@ function layLow()
     -- benefit (heat cools off in every precinct where you operate)
     local playerFaction = WorldUtils:getPlayerFaction()
     if playerFaction and playerFaction.cash then
-        local cost = math.min(500, playerFaction.cash.count)
+        local cost = math.min(math.floor(500 * (fact.MegaModCfgCost or 1)), playerFaction.cash.count) -- MEGAMOD CONFIG: cost knob (still clamped to cash on hand)
         if cost > 0 then
             BRScript:PlayerSubtractCash(cost, "CASH.EXPENSES")
         end
@@ -164,7 +166,7 @@ function ignoreIt()
         -- Raid: lose cash + more heat
         local playerFaction = WorldUtils:getPlayerFaction()
         -- MEGAMOD FIX: clamp the fine to available cash instead of skipping it entirely
-        local fine = math.min(1000, (playerFaction.cash and playerFaction.cash.count) or 0)
+        local fine = math.min(math.floor(1000 * (fact.MegaModCfgCost or 1)), (playerFaction.cash and playerFaction.cash.count) or 0) -- MEGAMOD CONFIG: cost knob (still clamped to cash on hand)
         if fine > 0 then
             BRScript:PlayerSubtractCash(fine, "CASH.FINE")
         end
@@ -173,10 +175,11 @@ function ignoreIt()
             local building = playerFaction.buildings[1]
             local precinct = building and building:getPrecinct()
             if precinct then
-                precinct:addTemporaryPoliceActivity(30) -- real heat; the game event below is only the UI toast
+                local heat = math.max(1, math.floor(30 * (fact.MegaModCfgHeat or 1))) -- MEGAMOD CONFIG: heat knob (toast quotes the same figure)
+                precinct:addTemporaryPoliceActivity(heat) -- real heat; the game event below is only the UI toast
                 Utils:raiseGameEvent("onPoliceActivityEffectApplied",
                     "alertKey", "MEGAMOD_UNTCH_RAID",
-                    "appliedPoliceActivity", 30,
+                    "appliedPoliceActivity", heat,
                     "originalValue", precinct:getPoliceActivity() or 0,
                     "effectId", "MEGAMOD_UNTOUCHABLE_RAID",
                     "precinct", precinct,

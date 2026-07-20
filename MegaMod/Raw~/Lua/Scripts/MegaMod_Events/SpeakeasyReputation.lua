@@ -108,7 +108,7 @@ function onTrigger()
     elseif milestone == MILESTONE_HOT_SPOT then
         title("$MEGAMOD_SPEKREP_hot_title") --$ The Hot Spot
         text("$MEGAMOD_SPEKREP_hot_text") --$ Everybody wants in. Your speakeasy has become the place to be, and the money is rolling in. Jazz bands are lining up to play, flappers are dancing on the tables, and the bootleg is flowing like the Chicago River. Here's $500 from the extra business.
-        BRScript:PlayerAddCash(500, "CASH.SPEAKEASY_REPUTATION")
+        BRScript:PlayerAddCash(math.floor(500 * (fact.MegaModCfgPayout or 1)), "CASH.SPEAKEASY_REPUTATION") -- MEGAMOD CONFIG: payout knob
         option("$MEGAMOD_SPEKREP_dismiss_cash") --$ Pour another round.
 
     elseif milestone == MILESTONE_UNWANTED_ATTENTION then
@@ -120,7 +120,7 @@ function onTrigger()
     elseif milestone == MILESTONE_LEGENDARY then
         title("$MEGAMOD_SPEKREP_legend_title") --$ Legendary Joint
         text("$MEGAMOD_SPEKREP_legend_text") --$ Your speakeasy is legendary. People come from all over Chicago just to say they've been here. The name is whispered in every barbershop, taxi, and jazz club in the city. Even the out-of-towners know about it. Here's $1500 from the overflow crowds.
-        BRScript:PlayerAddCash(1500, "CASH.SPEAKEASY_REPUTATION")
+        BRScript:PlayerAddCash(math.floor(1500 * (fact.MegaModCfgPayout or 1)), "CASH.SPEAKEASY_REPUTATION") -- MEGAMOD CONFIG: payout knob
         option("$MEGAMOD_SPEKREP_dismiss_legend") --$ This is what we built.
     end
     -- MEGAMOD FIX: no complete() in UI onTrigger (use-after-release); auto-complete
@@ -140,7 +140,7 @@ function applyPoliceHeat()
         if building and building.iid == barIid then
             local precinct = building:getPrecinct()
             if precinct then
-                precinct:addTemporaryPoliceActivity(15)
+                precinct:addTemporaryPoliceActivity(math.max(1, math.floor(15 * (fact.MegaModCfgHeat or 1)))) -- MEGAMOD CONFIG: heat knob
             end
             return
         end

@@ -124,13 +124,14 @@ function sendCrewOption()
 end
 
 function sendMoneyOption()
+    local cost = math.floor(800 * (fact.MegaModCfgCost or 1)) -- MEGAMOD CONFIG: cost knob (check + charge scale together)
     local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction or playerFaction.cash.count < 800 then
+    if not playerFaction or playerFaction.cash.count < cost then
         showMoonResult("$MEGAMOD_MOON_broke_title", "$MEGAMOD_MOON_broke_text") --$ Can't Afford It / You don't have $800 to send south. The moonshiner will have to fend for himself this time.
         return
     end
 
-    BRScript:PlayerSubtractCash(800, "CASH.MOONSHINE_OPS")
+    BRScript:PlayerSubtractCash(cost, "CASH.MOONSHINE_OPS")
 
     -- 70% success, 30% fail
     if math.random() < 0.70 then
@@ -188,8 +189,9 @@ function onTrigger()
     local playerFaction = WorldUtils:getPlayerFaction()
     if playerFaction then
         -- Fine for the trouble
-        if playerFaction.cash.count >= 200 then
-            BRScript:PlayerSubtractCash(200, "CASH.MOONSHINE_FINE")
+        local fine = math.floor(200 * (fact.MegaModCfgCost or 1)) -- MEGAMOD CONFIG: cost knob (check + charge scale together)
+        if playerFaction.cash.count >= fine then
+            BRScript:PlayerSubtractCash(fine, "CASH.MOONSHINE_FINE")
         end
 
         -- Still get some moonshine, just less
