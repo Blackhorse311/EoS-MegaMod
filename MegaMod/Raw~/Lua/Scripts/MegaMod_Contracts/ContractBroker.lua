@@ -51,11 +51,12 @@ function canTrigger()
 end
 
 function onTrigger()
-    contractorActor = ActorUtils:spawnActorWithNoLocation("NPC", "NPC.MEGAMOD_CONTRACT_BROKER")
+    -- MEGAMOD FIX: check preconditions before spawning so an early return can't leak a location-less actor
     local playerFaction = WorldUtils:getPlayerFaction()
     if not playerFaction then return end
     local safehouse = playerFaction:getPrimarySafehouse()
     if not safehouse then return end
+    contractorActor = ActorUtils:spawnActorWithNoLocation("NPC", "NPC.MEGAMOD_CONTRACT_BROKER")
     safehouse:enter(contractorActor, "IDLE", true)
     contractorActor.behaviours:add("MegaModBrokerBehaviour")
 
@@ -66,23 +67,22 @@ end
 
 --[[------------------------------------------------------------------------------
     Step 3: Follow-up report event
-    Reads the result stored on the contractor actor by the behaviour.
+    Receives the result as a scheduleWithDelay vararg from the behaviour.
 --------------------------------------------------------------------------------]]
 _namespace = "WORLD_EVENTS"
 _id = "MEGAMOD_CONTRACTOR_REPORT"
 _event = "MegaModContractorReport"
 
-function onTrigger()
-    if not contractorActor then
-        complete()
-        return
-    end
+-- MEGAMOD FIX: script vars are never shared across _id blocks, so the old
+-- contractorActor read was always nil. The result now arrives as a persisted
+-- vararg on this event.
+persist{}
+contractResult = nil
 
-    local result = contractorActor.contractResult
-    contractorActor.contractResult = nil
+function onTrigger()
+    local result = contractResult
 
     if not result then
-        complete()
         return
     end
 
@@ -101,7 +101,6 @@ function onTrigger()
         text("$MEGAMOD_CONTRACTOR_rpt_rattle_lose_text") --$ Word from The Contractor: "Didn't go as planned. Their boys were tougher than expected and mine had to pull back before they could do real damage. Your money's gone and word might have gotten back to that outfit that someone was trying to stir things up. No police heat, no disruption. Sometimes it goes that way."
     end
     option("$MEGAMOD_CONTRACTOR_rpt_dismiss") --$ Noted.
-    complete()
 end
 
 --[[------------------------------------------------------------------------------
@@ -235,10 +234,20 @@ function ExecuteContract()
         return
     end
 
+    -- MEGAMOD FIX: resolve a stable faction id before charging; a bare index into
+    -- the daily-rebuilt faction list can go stale
+    local factions = them.contractFactions
+    local entry = factions and factions[selectedFactionIdx]
+    if not entry then
+        say("$MEGAMOD_CONTRACTOR_no_rivals")
+        option("$MEGAMOD_CONTRACTOR_leave", Leave)
+        return
+    end
+
     BRScript:PlayerSubtractCash(cost, "CASH.CONTRACT")
 
     them.pendingContractType = selectedServiceType
-    them.pendingContractFaction = selectedFactionIdx
+    them.pendingContractFactionId = entry.id
 
     say("$MEGAMOD_CONTRACTOR_execute") --$ Consider it done. My people are already on the move. I'll have a report for you by tomorrow. In the meantime, keep your hands clean and let me handle the dirty work.
     option("$MEGAMOD_CONTRACTOR_more", MainMenu)
@@ -269,30 +278,33 @@ function GameEvent.onDayBegin(e)
     refreshFactionList()
 
     -- Fire follow-up report if a contract result is pending
-    if thisActor.pendingReport then
-        thisActor.pendingReport = nil
-        -- Proxy result through primary actor so the report event can read it
-        if contractorActor and thisActor ~= contractorActor then
-            contractorActor.contractResult = thisActor.contractResult
-            thisActor.contractResult = nil
+    -- MEGAMOD FIX: result lives in save-durable actor memory and is delivered to the
+    -- report event as a scheduleWithDelay vararg (script vars don't cross _id blocks)
+    if thisActor.memory.megamodPendingReport then
+        thisActor.memory.megamodPendingReport = nil
+        local result = thisActor.memory.megamodContractResult
+        thisActor.memory.megamodContractResult = nil
+        if result then
+            WorldUtils:scheduleWithDelay("MegaModContractorReport", 5, "TICK", "contractResult", result)
         end
-        WorldUtils:scheduleWithDelay("MegaModContractorReport", 5, "TICK")
     end
 end
 
 function GameEvent.frame(e)
-    local contractType = thisActor.pendingContractType
-    local factionIdx = thisActor.pendingContractFaction
+    -- MEGAMOD FIX: rebuild after save/load (ad-hoc cache field is not saved)
+    if not thisActor.contractFactions then
+        refreshFactionList()
+    end
 
-    if not contractType or not factionIdx then return end
+    local contractType = thisActor.pendingContractType
+    local factionId = thisActor.pendingContractFactionId
+
+    if not contractType or not factionId then return end
 
     thisActor.pendingContractType = nil
-    thisActor.pendingContractFaction = nil
+    thisActor.pendingContractFactionId = nil
 
-    local factions = thisActor.contractFactions
-    if not factions or not factions[factionIdx] then return end
-
-    local targetFaction = factions[factionIdx].faction
+    local targetFaction = WorldUtils:getFactionById(factionId)
     if not targetFaction or targetFaction:isDead() then return end
 
     if contractType == "hitman" then
@@ -316,15 +328,15 @@ function processHitman(targetFaction)
         if #targets > 0 then
             local victim = targets[math.random(#targets)]
             victim:kill()
-            thisActor.contractResult = "hitman_win"
+            thisActor.memory.megamodContractResult = "hitman_win"
         else
             -- No valid targets found, treat as failure
-            thisActor.contractResult = "hitman_lose"
+            thisActor.memory.megamodContractResult = "hitman_lose"
         end
     else
-        thisActor.contractResult = "hitman_lose"
+        thisActor.memory.megamodContractResult = "hitman_lose"
     end
-    thisActor.pendingReport = true
+    thisActor.memory.megamodPendingReport = true
 end
 
 function processRattle(targetFaction)
@@ -332,22 +344,23 @@ function processRattle(targetFaction)
         local buildings = targetFaction.buildings
         if buildings and #buildings > 0 then
             local building = buildings[math.random(#buildings)]
-            if building and building.neighborhood then
-                Utils:raiseGameEvent("onPoliceActivityEffectApplied", {
-                    neighborhood = building.neighborhood,
-                    amount = 15,
-                })
-                thisActor.contractResult = "rattle_win"
+            -- MEGAMOD FIX: building.neighborhood doesn't exist (always failed) and the
+            -- old game event was only a UI toast; apply real police heat to the rival's
+            -- precinct as the flavor text promises
+            local precinct = building and building:getPrecinct()
+            if precinct then
+                precinct:addTemporaryPoliceActivity(15)
+                thisActor.memory.megamodContractResult = "rattle_win"
             else
-                thisActor.contractResult = "rattle_lose"
+                thisActor.memory.megamodContractResult = "rattle_lose"
             end
         else
-            thisActor.contractResult = "rattle_lose"
+            thisActor.memory.megamodContractResult = "rattle_lose"
         end
     else
-        thisActor.contractResult = "rattle_lose"
+        thisActor.memory.megamodContractResult = "rattle_lose"
     end
-    thisActor.pendingReport = true
+    thisActor.memory.megamodPendingReport = true
 end
 
 function refreshFactionList()

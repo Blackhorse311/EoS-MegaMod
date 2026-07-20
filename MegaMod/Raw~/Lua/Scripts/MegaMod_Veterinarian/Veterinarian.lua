@@ -42,11 +42,12 @@ function canTrigger()
 end
 
 function onTrigger()
-    local vet = ActorUtils:spawnActorWithNoLocation("NPC", "NPC.MEGAMOD_VETERINARIAN")
+    -- MEGAMOD FIX: check preconditions BEFORE spawning so an early return can't leak a location-less actor
     local playerFaction = WorldUtils:getPlayerFaction()
     if not playerFaction then return end
     local safehouse = playerFaction:getPrimarySafehouse()
     if not safehouse then return end
+    local vet = ActorUtils:spawnActorWithNoLocation("NPC", "NPC.MEGAMOD_VETERINARIAN")
     safehouse:enter(vet, "IDLE", true)
     vet.behaviours:add("MegaModVetBehaviour")
 
@@ -59,9 +60,10 @@ end
     Step 3: Conversation - healing services and favor system
 
     Injury detection is done in BEHAVIOURS (where WorldUtils works) and stored
-    on the actor. Conversation reads them.vetInjuredMembers (table of actors)
-    and them.vetInjuredCount (number). Healing sets them.vetHealOne or
-    them.vetHealAll flags, picked up by BEHAVIOURS GameEvent.frame.
+    on the actor. Conversation reads them.vetInjuredCount (number). Paid heals
+    increment them.vetHealCount (counter, so each payment heals exactly one);
+    favors/heal-all set them.vetHealAll. Both picked up by BEHAVIOURS
+    GameEvent.frame.
 --------------------------------------------------------------------------------]]
 _namespace = "CONVERSATIONS"
 _id = "MEGAMOD_VET_CONVERSATION"
@@ -119,7 +121,10 @@ function HealFirst()
     end
 
     BRScript:PlayerSubtractCash(750, "CASH.VET_HEALING")
-    them.vetHealOne = true
+    -- MEGAMOD FIX: counter instead of boolean so rapid repeat purchases can't
+    -- double-charge for a single heal; decrement the count for the next menu
+    them.vetHealCount = (them.vetHealCount or 0) + 1
+    them.vetInjuredCount = count - 1
 
     say("$MEGAMOD_VET_healed_one") --$ Patched up and ready to go. Not my prettiest work, but the stitches will hold. Probably. Don't let them do anything stupid for a day or two.
 
@@ -145,6 +150,7 @@ function HealAll()
 
     BRScript:PlayerSubtractCash(totalCost, "CASH.VET_HEALING")
     them.vetHealAll = true
+    them.vetInjuredCount = 0
 
     say("$MEGAMOD_VET_healed_all") --$ All of your people are patched up. I used more catgut than I'd normally burn through in a month. You're keeping me in business, I'll give you that.
 
@@ -231,9 +237,9 @@ end
 
 --[[------------------------------------------------------------------------------
     Step 4: Behaviour - injury detection and healing execution
-    WorldUtils IS available here. We pre-build the injured list every frame
-    and store it on the actor for the conversation to read.
-    Healing flags set by conversation are processed here too.
+    WorldUtils IS available here. The injured count is refreshed daily, after
+    heals, and after save/load, then stored on the actor for the conversation.
+    Healing requests set by conversation are processed here too.
 --------------------------------------------------------------------------------]]
 _namespace = "BEHAVIOURS"
 _id = "MEGAMOD_VET_BEHAVIOUR"
@@ -249,12 +255,19 @@ function GameEvent.onDayBegin(e)
 end
 
 function GameEvent.frame(e)
-    -- Process heal-one flag from conversation
-    if thisActor.vetHealOne then
-        thisActor.vetHealOne = nil
+    -- MEGAMOD FIX: ad-hoc actor fields aren't saved; re-derive the count after load
+    if thisActor.vetInjuredCount == nil then
+        refreshInjuredList()
+    end
+
+    -- Process paid heals from conversation (counter: one heal per payment)
+    local healCount = thisActor.vetHealCount
+    if healCount and healCount > 0 then
+        thisActor.vetHealCount = nil
         local injured = getInjuredFromFaction()
-        if #injured > 0 then
-            healMember(injured[1])
+        local numToHeal = math.min(healCount, #injured)
+        for i = 1, numToHeal do
+            healMember(injured[i])
         end
         refreshInjuredList()
     end
@@ -273,31 +286,36 @@ end
 function getInjuredFromFaction()
     local injured = {}
     local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction then return injured, 0 end
+    if not playerFaction then return injured end
     local members = playerFaction.members
-    if not members then return injured, 0 end
-    local total = #members
-    for i = 1, total do
+    if not members then return injured end
+    for i = 1, #members do
         local member = members[i]
-        if member and not member:isDead() and member:isDamaged() then
+        -- MEGAMOD FIX: also catch members carrying the formal Injury state
+        if member and not member:isDead() and (member:isDamaged() or member:hasState("Injury")) then
             injured[#injured + 1] = member
         end
     end
-    return injured, total
+    return injured
 end
 
 function refreshInjuredList()
-    local injured, total = getInjuredFromFaction()
-    thisActor.vetInjuredMembers = injured
-    thisActor.vetInjuredCount = #injured
-    thisActor.vetTotalMembers = total
+    thisActor.vetInjuredCount = #getInjuredFromFaction()
 end
 
 function healMember(member)
-    -- Reset health to full and clear any formal injury
+    -- Reset health to full (same calls as vanilla Injury.lua resetMaxHP)
     member.health:reset()
     member.health:processCurrentHealth()
-    if member.injury then
-        member.injury = nil
+    -- MEGAMOD FIX: member.injury = nil did nothing; clear the real "Injury" state
+    -- and bring the member back from the hospital (mirrors vanilla Injury.lua
+    -- recoverFromInjury: return to nearest safehouse, then remove the state)
+    if member:hasState("Injury") then
+        local destinationBuilding = TravelUtils:safeGetNearestSafehouse(member)
+        if destinationBuilding then
+            local pos, rot = destinationBuilding:getFreeStation(member)
+            member:setLocationId(destinationBuilding.interiorLocationId, pos, rot)
+        end
+        member:removeState("Injury")
     end
 end

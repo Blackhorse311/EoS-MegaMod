@@ -107,14 +107,14 @@ function canTrigger()
 end
 
 function onTrigger()
-    recruiterActor = ActorUtils:spawnActorWithNoLocation("NPC", "NPC.MEGAMOD_RECRUITER")
+    -- MEGAMOD FIX: check preconditions before spawning so an early return can't leak a location-less actor
     local playerFaction = WorldUtils:getPlayerFaction()
     if not playerFaction then return end
     local safehouse = playerFaction:getPrimarySafehouse()
     if not safehouse then return end
+    recruiterActor = ActorUtils:spawnActorWithNoLocation("NPC", "NPC.MEGAMOD_RECRUITER")
     safehouse:enter(recruiterActor, "IDLE", true)
     recruiterActor.behaviours:add("MegaModRecruiterBehaviour")
-    recruiterActor.hireCount = 0
 
     title("$MEGAMOD_RECRUITER_arrive_title") --$ Gotta Go See Top Jimmy
     text("$MEGAMOD_RECRUITER_arrive_text") --$ A wiry Irishman has claimed a corner of your safehouse, sitting on the top stool at the end of the bar like he owns the place. "Top Jimmy," he says. "I'm the king of this scene, pal. You need somebody? I know everybody, and everybody knows me." He cracks his knuckles and grins. "I been running this from sundown to sunup for years. You got problems? I'll set you straight."
@@ -130,25 +130,22 @@ _namespace = "WORLD_EVENTS"
 _id = "MEGAMOD_RECRUIT_STREET_HIRE"
 _event = "MegaModRecruitStreetHire"
 
+-- MEGAMOD FIX: the target safehouse arrives as a scheduleWithDelay vararg;
+-- cross-block script vars (recruiterActor) are never shared
+persist{}
+targetSafehouse = nil
+
 function onTrigger()
     local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction then complete() return end
-    local safehouse = nil
-    if recruiterActor and recruiterActor.hireTargetSafehouse then
-        safehouse = recruiterActor.hireTargetSafehouse
-        recruiterActor.hireTargetSafehouse = nil
-    end
+    if not playerFaction then return end
+    local safehouse = targetSafehouse
     if not safehouse then
         safehouse = playerFaction:getPrimarySafehouse()
     end
-    if not safehouse then complete() return end
+    if not safehouse then return end
     local recruit = ActorUtils:spawnActorWithNoLocation("NPC", "NPC.MEGAMOD_RECRUIT_STREET")
     recruit:setFaction(playerFaction)
     safehouse:enter(recruit, "IDLE", true)
-
-    if recruiterActor then
-        recruiterActor.hireCount = (recruiterActor.hireCount or 0) + 1
-    end
 
     -- Pan camera to the new recruit so the player sees them
     WorldUtils:focusOnActor(recruit, false, "goto_location")
@@ -157,32 +154,26 @@ function onTrigger()
     title("$MEGAMOD_RECRUIT_arrive_title") --$ New Recruit On Duty
     text("$MEGAMOD_RECRUIT_STREET_arrive") --$ Top Jimmy cooks, Top Jimmy swings -- and here's the proof. A street tough has shown up at your safehouse, armed and ready. He's not much to look at, but he's one more gun between you and trouble. He'll hold his post and fight for you when the time comes. Another satisfied customer of Top Jimmy's operation.
     option("$MEGAMOD_RECRUIT_arrive_ok") --$ Welcome aboard.
-    complete()
 end
 
 _namespace = "WORLD_EVENTS"
 _id = "MEGAMOD_RECRUIT_VETERAN_HIRE"
 _event = "MegaModRecruitVeteranHire"
 
+persist{}
+targetSafehouse = nil
+
 function onTrigger()
     local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction then complete() return end
-    local safehouse = nil
-    if recruiterActor and recruiterActor.hireTargetSafehouse then
-        safehouse = recruiterActor.hireTargetSafehouse
-        recruiterActor.hireTargetSafehouse = nil
-    end
+    if not playerFaction then return end
+    local safehouse = targetSafehouse
     if not safehouse then
         safehouse = playerFaction:getPrimarySafehouse()
     end
-    if not safehouse then complete() return end
+    if not safehouse then return end
     local recruit = ActorUtils:spawnActorWithNoLocation("NPC", "NPC.MEGAMOD_RECRUIT_VETERAN")
     recruit:setFaction(playerFaction)
     safehouse:enter(recruit, "IDLE", true)
-
-    if recruiterActor then
-        recruiterActor.hireCount = (recruiterActor.hireCount or 0) + 1
-    end
 
     WorldUtils:focusOnActor(recruit, false, "goto_location")
 
@@ -190,32 +181,26 @@ function onTrigger()
     title("$MEGAMOD_RECRUIT_arrive_title") --$ New Recruit On Duty
     text("$MEGAMOD_RECRUIT_VETERAN_arrive") --$ Top Jimmy delivers again. A veteran gun has arrived at your safehouse, battle-tested and ready. This one's got the look of a man who's seen real action and lived to tell about it. He'll hold his ground when the lead starts flying. Your safehouse just got a lot harder to crack.
     option("$MEGAMOD_RECRUIT_arrive_ok") --$ Welcome aboard.
-    complete()
 end
 
 _namespace = "WORLD_EVENTS"
 _id = "MEGAMOD_RECRUIT_ELITE_HIRE"
 _event = "MegaModRecruitEliteHire"
 
+persist{}
+targetSafehouse = nil
+
 function onTrigger()
     local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction then complete() return end
-    local safehouse = nil
-    if recruiterActor and recruiterActor.hireTargetSafehouse then
-        safehouse = recruiterActor.hireTargetSafehouse
-        recruiterActor.hireTargetSafehouse = nil
-    end
+    if not playerFaction then return end
+    local safehouse = targetSafehouse
     if not safehouse then
         safehouse = playerFaction:getPrimarySafehouse()
     end
-    if not safehouse then complete() return end
+    if not safehouse then return end
     local recruit = ActorUtils:spawnActorWithNoLocation("NPC", "NPC.MEGAMOD_RECRUIT_ELITE")
     recruit:setFaction(playerFaction)
     safehouse:enter(recruit, "IDLE", true)
-
-    if recruiterActor then
-        recruiterActor.hireCount = (recruiterActor.hireCount or 0) + 1
-    end
 
     WorldUtils:focusOnActor(recruit, false, "goto_location")
 
@@ -328,16 +313,27 @@ function GameEvent.frame(e)
     local tier = thisActor.pendingHireTier
     if tier then
         thisActor.pendingHireTier = nil
-        -- Store which safehouse to send the recruit to (for multi-safehouse support)
-        if recruiterActor then
-            recruiterActor.hireTargetSafehouse = thisActor.homeSafehouse
+        -- MEGAMOD FIX: resolve this NPC's safehouse (clone-aware, save-durable) and hand
+        -- it to the hire event as a persisted vararg; the old recruiterActor proxy was a no-op
+        local safehouse = thisActor.memory.megamodHomeSafehouse
+        if not safehouse then
+            local location = WorldUtils:getLocationFromId(thisActor:getLocationId())
+            if location and location.isInterior then
+                safehouse = location.building
+            end
         end
+        local eventName
         if tier == 1 then
-            WorldUtils:scheduleWithDelay("MegaModRecruitStreetHire", 1, "TICK")
+            eventName = "MegaModRecruitStreetHire"
         elseif tier == 2 then
-            WorldUtils:scheduleWithDelay("MegaModRecruitVeteranHire", 1, "TICK")
+            eventName = "MegaModRecruitVeteranHire"
         elseif tier == 3 then
-            WorldUtils:scheduleWithDelay("MegaModRecruitEliteHire", 1, "TICK")
+            eventName = "MegaModRecruitEliteHire"
+        end
+        if eventName and safehouse then
+            WorldUtils:scheduleWithDelay(eventName, 1, "TICK", "targetSafehouse", safehouse)
+        elseif eventName then
+            WorldUtils:scheduleWithDelay(eventName, 1, "TICK")
         end
     end
 end

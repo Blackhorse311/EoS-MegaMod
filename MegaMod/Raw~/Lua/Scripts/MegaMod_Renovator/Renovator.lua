@@ -13,8 +13,9 @@
     - BEHAVIOURS pre-builds a neighborhood -> buildings list every day
     - CONVERSATIONS reads them.renoHoods[N] for neighborhoods, then
       them.renoHoods[N].buildings[M] for buildings within
-    - Renovation execution is deferred to a WORLD_EVENT via scheduleWithDelay
-      because getWorld() is only available in WORLD_EVENTS, not BEHAVIOURS
+    - Renovation execution is deferred to a WORLD_EVENT via scheduleWithDelay;
+      the building/config travel as persisted varargs on the scheduled event
+      (script vars are never shared across _id blocks)
 --------------------------------------------------------------------------------]]
 
 --[[------------------------------------------------------------------------------
@@ -58,11 +59,12 @@ function canTrigger()
 end
 
 function onTrigger()
-    renovatorActor = ActorUtils:spawnActorWithNoLocation("NPC", "NPC.MEGAMOD_RENOVATOR")
+    -- MEGAMOD FIX: check preconditions before spawning so an early return can't leak a location-less actor
     local playerFaction = WorldUtils:getPlayerFaction()
     if not playerFaction then return end
     local safehouse = playerFaction:getPrimarySafehouse()
     if not safehouse then return end
+    renovatorActor = ActorUtils:spawnActorWithNoLocation("NPC", "NPC.MEGAMOD_RENOVATOR")
     safehouse:enter(renovatorActor, "IDLE", true)
     renovatorActor.behaviours:add("MegaModRenovatorBehaviour")
 
@@ -73,32 +75,30 @@ end
 
 --[[------------------------------------------------------------------------------
     Step 3: Renovation execution event
-    Triggered by BEHAVIOURS via scheduleWithDelay. getWorld() IS available here.
-    Reads pending data from the renovator actor stored during spawn.
+    Triggered by BEHAVIOURS via scheduleWithDelay. Receives the building and
+    target config as persisted varargs on this event.
 --------------------------------------------------------------------------------]]
 _namespace = "WORLD_EVENTS"
 _id = "MEGAMOD_RENOVATE_EXECUTE"
 _event = "MegaModRenovateBuilding"
 
+-- MEGAMOD FIX: script vars are never shared across _id blocks, so the old
+-- renovatorActor read was always nil here and the renovation never ran.
+persist{}
+renoBuilding = nil
+persist{}
+renoConfig = nil
+
 function onTrigger()
-    if not renovatorActor then
-        complete()
-        return
-    end
-
-    local building = renovatorActor.pendingRenoBuilding
-    local configId = renovatorActor.pendingRenoConfig
-    renovatorActor.pendingRenoBuilding = nil
-    renovatorActor.pendingRenoConfig = nil
-
-    if building and configId then
-        local newName = getWorld().pickRandomRacketName(configId)
-        local faction = building:getOwnerFaction()
+    if renoBuilding and renoConfig then
+        -- MEGAMOD FIX: bare getWorld() is not available in script context;
+        -- WorldUtils:pickRandomRacketName is the registered equivalent
+        local newName = WorldUtils:pickRandomRacketName(renoConfig)
+        local faction = renoBuilding:getOwnerFaction()
         if faction then
-            faction:changeRacketType(building, configId, newName)
+            faction:changeRacketType(renoBuilding, renoConfig, newName)
         end
     end
-    complete()
 end
 
 --[[------------------------------------------------------------------------------
@@ -322,18 +322,23 @@ function GameEvent.onDayBegin(e)
 end
 
 function GameEvent.frame(e)
+    -- MEGAMOD FIX: rebuild after save/load (ad-hoc cache field is not saved)
+    if not thisActor.renoHoods then
+        refreshBuildingList()
+    end
+
     -- Process pending renovation from conversation
     if thisActor.pendingRenovation then
         thisActor.pendingRenovation = nil
-        -- Proxy data through primary actor so the execute event can read it
-        if renovatorActor and thisActor ~= renovatorActor then
-            renovatorActor.pendingRenoBuilding = thisActor.pendingRenoBuilding
-            renovatorActor.pendingRenoConfig = thisActor.pendingRenoConfig
-            thisActor.pendingRenoBuilding = nil
-            thisActor.pendingRenoConfig = nil
+        local building = thisActor.pendingRenoBuilding
+        local configId = thisActor.pendingRenoConfig
+        thisActor.pendingRenoBuilding = nil
+        thisActor.pendingRenoConfig = nil
+        if building and configId then
+            -- MEGAMOD FIX: hand the work to the WORLD_EVENT via persisted varargs;
+            -- the old primary-actor proxy never delivered it (clone or not)
+            WorldUtils:scheduleWithDelay("MegaModRenovateBuilding", 1, "TICK", "renoBuilding", building, "renoConfig", configId)
         end
-        -- Defer to WORLD_EVENT where getWorld() is available
-        WorldUtils:scheduleWithDelay("MegaModRenovateBuilding", 1, "TICK")
     end
 end
 
@@ -385,15 +390,4 @@ function refreshBuildingList()
     end
 
     thisActor.renoHoods = hoodsOrder
-
-    -- Keep legacy renoSlots for backward compatibility with any old save data
-    local flatSlots = {}
-    for _, hood in ipairs(hoodsOrder) do
-        for _, b in ipairs(hood.buildings) do
-            flatSlots[#flatSlots + 1] = b
-            if #flatSlots >= 8 then break end
-        end
-        if #flatSlots >= 8 then break end
-    end
-    thisActor.renoSlots = flatSlots
 end

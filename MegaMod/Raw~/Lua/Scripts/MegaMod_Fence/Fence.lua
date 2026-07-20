@@ -43,11 +43,12 @@ function canTrigger()
 end
 
 function onTrigger()
-    local fence = ActorUtils:spawnActorWithNoLocation("NPC", "NPC.MEGAMOD_FENCE")
+    -- MEGAMOD FIX: check preconditions BEFORE spawning so an early return can't leak a location-less actor
     local playerFaction = WorldUtils:getPlayerFaction()
     if not playerFaction then return end
     local safehouse = playerFaction:getPrimarySafehouse()
     if not safehouse then return end
+    local fence = ActorUtils:spawnActorWithNoLocation("NPC", "NPC.MEGAMOD_FENCE")
     safehouse:enter(fence, "IDLE", true)
     fence.behaviours:add("MegaModFenceBehaviour")
 
@@ -59,14 +60,17 @@ end
 --[[------------------------------------------------------------------------------
     Step 3: Fence conversation
     Conversation sandbox: no WorldUtils, no getWorld().
-    Data prepared by behaviour is read via 'them' (the NPC actor).
+    MEGAMOD FIX: state now lives in world facts (save-persistent, shared by all
+    safehouse clones) instead of ad-hoc actor fields, and the 'worldTime' special
+    key replaces the unreachable client.time.worldTime:
 
-    them.fenceOnCooldown   - boolean, set by behaviour if < 7 days since last sell
-    them.hasSpecialDeal    - boolean, 40% chance refreshed periodically
-    them.fencePendingSell   - boolean, signals behaviour to start cooldown
+    fact.MegaModFenceCooldownUntil - worldTime when the 7-day sell cooldown ends
+    fact.MegaModFenceSpecialDeal   - boolean, 40% chance refreshed periodically
 
     Building count for payout uses you.faction.buildings (available in sandbox).
 --------------------------------------------------------------------------------]]
+local FENCE_COOLDOWN_SECS = 7 * 24 * 60 * 60
+
 _namespace = "CONVERSATIONS"
 _id = "MEGAMOD_FENCE_CONVERSATION"
 EntryPoint = "MegaMod_Fence_Start"
@@ -88,7 +92,7 @@ end
 
 function SellGoods()
     -- Check cooldown
-    if them.fenceOnCooldown then
+    if fact.MegaModFenceCooldownUntil and worldTime < fact.MegaModFenceCooldownUntil then
         say("$MEGAMOD_FENCE_cooldown") --$ I just moved your last batch. Give me a week to find more buyers. Come back later.
                 option("$MEGAMOD_FENCE_backtomenu", MainMenu)  --$ Anything else?
             option("$MEGAMOD_FENCE_leave", Leave)  --$ I'll be back
@@ -126,22 +130,21 @@ function DoSell()
     local payout = them.pendingPayout or 100
     them.pendingPayout = nil
     BRScript:PlayerAddCash(payout, "CASH.FENCE_SALE")
-    them.fencePendingSell = true
-    them.fenceOnCooldown = true
+    fact.MegaModFenceCooldownUntil = worldTime + FENCE_COOLDOWN_SECS
     say("$MEGAMOD_FENCE_sell_done") --$ Done. Your extra product's on its way to my buyers and the cash is yours. Clean as a whistle. Well, clean enough.
     option("$MEGAMOD_FENCE_backtomenu", MainMenu) --$ Anything else?
     option("$MEGAMOD_FENCE_leave", Leave) --$ Pleasure doing business
 end
 
 function CheckSpecialDeal()
-    if them.fenceOnCooldown then
+    if fact.MegaModFenceCooldownUntil and worldTime < fact.MegaModFenceCooldownUntil then
         say("$MEGAMOD_FENCE_cooldown") --$ I just moved your last batch. Give me a week to find more buyers. Come back later.
                 option("$MEGAMOD_FENCE_backtomenu", MainMenu)
             option("$MEGAMOD_FENCE_leave", Leave)
         return
     end
 
-    if not them.hasSpecialDeal then
+    if not fact.MegaModFenceSpecialDeal then
         say("$MEGAMOD_FENCE_no_special") --$ Nothing special right now. My contacts are keeping their heads down. Check back next time, I might have something cooking.
                 option("$MEGAMOD_FENCE_backtomenu", MainMenu)  --$ Anything else?
             option("$MEGAMOD_FENCE_leave", Leave)  --$ I'll be back
@@ -179,9 +182,8 @@ function DoSpecialSell()
     local payout = them.pendingPayout or 200
     them.pendingPayout = nil
     BRScript:PlayerAddCash(payout, "CASH.FENCE_SALE")
-    them.fencePendingSell = true
-    them.fenceOnCooldown = true
-    them.hasSpecialDeal = false
+    fact.MegaModFenceCooldownUntil = worldTime + FENCE_COOLDOWN_SECS
+    fact.MegaModFenceSpecialDeal = false
     say("$MEGAMOD_FENCE_special_done") --$ Beautiful. My buyer is thrilled, you're flush with cash, and I get my cut. Everybody wins. Well, everybody except whoever you stole all that from.
     option("$MEGAMOD_FENCE_backtomenu", MainMenu) --$ Anything else?
     option("$MEGAMOD_FENCE_leave", Leave) --$ Pleasure doing business
@@ -196,7 +198,7 @@ end
     Step 4: Fence behaviour
     - Sets conversation entry point
     - Periodically refreshes special deal availability (40% chance)
-    - Manages 7-day cooldown between sales
+    - Cooldown itself is checked in the conversation via fact + worldTime
     WorldUtils IS available in behaviours.
 --------------------------------------------------------------------------------]]
 _namespace = "BEHAVIOURS"
@@ -205,32 +207,29 @@ _name = "MegaModFenceBehaviour"
 
 function onAdd()
     thisActor:setConversationEntryPoint("MegaMod_Fence_Start")
-    -- Initialize special deal on spawn
-    thisActor.hasSpecialDeal = math.random() < 0.4
-    thisActor.fenceOnCooldown = false
+    -- Initialize special deal once (fact is shared by clones; don't re-roll per clone)
+    if fact.MegaModFenceSpecialDeal == nil then
+        fact.MegaModFenceSpecialDeal = math.random() < 0.4
+    end
 end
 
 function GameEvent.onDayBegin(e)
-    -- If a sell happened, record the cooldown timestamp
-    if thisActor.fencePendingSell and not thisActor.fenceSellTimestamp then
-        thisActor.fencePendingSell = nil
-        thisActor.fenceSellTimestamp = client.time.worldTime
-    end
+    -- MEGAMOD FIX: client.time.worldTime is nil in script ctx (cooldown became permanent);
+    -- use the worldTime special key + world facts. Day guard so safehouse clones roll once.
+    local today = math.floor(worldTime / 86400)
+    if fact.MegaModFenceDealRollDay == today then return end
+    fact.MegaModFenceDealRollDay = today
 
-    -- Check if cooldown has expired (7 days)
-    if thisActor.fenceSellTimestamp then
-        local elapsed = client.time.worldTime - thisActor.fenceSellTimestamp
-        if elapsed >= (7 * 24 * 60 * 60) then
-            thisActor.fenceOnCooldown = false
-            thisActor.fenceSellTimestamp = nil
-            thisActor.hasSpecialDeal = math.random() < 0.4
+    if fact.MegaModFenceCooldownUntil then
+        -- Check if cooldown has expired (7 days)
+        if worldTime >= fact.MegaModFenceCooldownUntil then
+            fact.MegaModFenceCooldownUntil = nil
+            fact.MegaModFenceSpecialDeal = math.random() < 0.4
         end
-    end
-
-    -- Small daily chance to gain a special deal if not on cooldown
-    if not thisActor.fenceOnCooldown and not thisActor.hasSpecialDeal then
+    elseif not fact.MegaModFenceSpecialDeal then
+        -- Small daily chance to gain a special deal if not on cooldown
         if math.random() < 0.15 then
-            thisActor.hasSpecialDeal = true
+            fact.MegaModFenceSpecialDeal = true
         end
     end
 end

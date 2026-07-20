@@ -38,15 +38,13 @@ _autoStartMode = "Schedule"
 _triggerDelay = 15
 _category = "Misc"
 
-persist{}
-icaRepActor = nil
-
 function canTrigger()
     return true
 end
 
 function onTrigger()
-    icaRepActor = ActorUtils:spawnActorWithNoLocation("NPC", "NPC.MEGAMOD_ICAREP")
+    -- MEGAMOD FIX: was a persist var; only used inside this function, so a plain local suffices
+    local icaRepActor = ActorUtils:spawnActorWithNoLocation("NPC", "NPC.MEGAMOD_ICAREP")
     local playerFaction = WorldUtils:getPlayerFaction()
     if not playerFaction then return end
     local safehouse = playerFaction:getPrimarySafehouse()
@@ -57,15 +55,16 @@ function onTrigger()
     title("$MEGAMOD_BANK_arrive_title") --$ A Visitor From Abroad
     text("$MEGAMOD_BANK_arrive_text") --$ A sharply dressed man with a foreign accent and an air of quiet authority has appeared in your safehouse. He introduces himself only as "Mr. Smith" and says he has work for you. Lucrative work. Talk to him when you're ready.
     option("$MEGAMOD_BANK_arrive_option") --$ Interesting.
-    complete()
+    -- MEGAMOD FIX: no complete() here - this event shows UI; auto-complete handles it
 end
 
--- Note: Mission creation and cancel are handled in BEHAVIOURS GameEvent.onDayBegin
+-- Note: Mission creation is handled in BEHAVIOURS GameEvent.onDayBegin;
+-- cancellation of a running mission is handled by the MISSIONS script itself.
 
 --[[------------------------------------------------------------------------------
     CONVERSATIONS: Full contract flow handled in conversation.
     Target info shown as individual localization-key options on one screen.
-    Mission created via flag picked up by WORLD_EVENTS onDayBegin.
+    Mission created via flag picked up by BEHAVIOURS onDayBegin.
 --------------------------------------------------------------------------------]]
 _namespace = "CONVERSATIONS"
 _id = "MEGAMOD_ICAREP_CONVERSATION"
@@ -85,29 +84,57 @@ local targetFaction = nil
 local targetType = nil
 local contractActive = false
 
-function onStart()
-    -- Sync intro flags from actor (persists across save/load)
-    askedWhoAreYou = them.icaAskedWho or false
-    askedWhyMe = them.icaAskedWhyMe or false
-    askedWhyContract = them.icaAskedWhyContract or false
-    askedWhyMoney = them.icaAskedWhyMoney or false
+-- MEGAMOD FIX: single place that wipes contract state so accept/payout/fail/cancel
+-- all leave the same clean slate (icaCancelContract handled separately by callers)
+function ClearContractState()
+    contractActive = false
+    currentTarget = nil
+    targetName = nil
+    targetNeighborhood = nil
+    targetPrecinct = nil
+    targetFaction = nil
+    targetType = nil
+    them.memory.icaContractActive = nil
+    them.memory.icaActiveTarget = nil
+    them.memory.icaActiveTargetName = nil
+    them.memory.icaActiveTargetHood = nil
+    them.memory.icaActiveTargetPrecinct = nil
+    them.memory.icaActiveTargetFaction = nil
+    them.memory.icaActiveTargetType = nil
+    them.memory.icaPendingMission = nil
+end
 
-    -- Sync contract state from actor properties (persists across conversations)
-    if them.icaContractActive then
+function onStart()
+    -- MEGAMOD FIX: ad-hoc actor fields are not saved; actor memory survives save/load
+    askedWhoAreYou = them.memory.icaAskedWho or false
+    askedWhyMe = them.memory.icaAskedWhyMe or false
+    askedWhyContract = them.memory.icaAskedWhyContract or false
+    askedWhyMoney = them.memory.icaAskedWhyMoney or false
+
+    -- Sync contract state from actor memory (persists across conversations and save/load)
+    if them.memory.icaContractActive then
         contractActive = true
-        currentTarget = them.icaActiveTarget
-        targetName = them.icaActiveTargetName
-        targetNeighborhood = them.icaActiveTargetHood
-        targetPrecinct = them.icaActiveTargetPrecinct
-        targetFaction = them.icaActiveTargetFaction
-        targetType = them.icaActiveTargetType
+        currentTarget = them.memory.icaActiveTarget
+        targetName = them.memory.icaActiveTargetName
+        targetNeighborhood = them.memory.icaActiveTargetHood
+        targetPrecinct = them.memory.icaActiveTargetPrecinct
+        targetFaction = them.memory.icaActiveTargetFaction
+        targetType = them.memory.icaActiveTargetType
     end
 
     -- Contract completed: payout
-    if them.icaContractCompleted then
-        them.icaContractCompleted = nil
+    if them.memory.icaContractCompleted then
+        them.memory.icaContractCompleted = nil
         go(PayOut)
         return
+    end
+
+    -- MEGAMOD FIX: target actor no longer exists - void the contract cleanly
+    if contractActive and not currentTarget then
+        if not them.memory.icaPendingMission then
+            them.memory.icaCancelContract = true -- tell the running mission to fail itself
+        end
+        ClearContractState()
     end
 
     -- Active contract: check target status
@@ -152,28 +179,28 @@ end
 
 function WhoAreYou()
     askedWhoAreYou = true
-    them.icaAskedWho = true
+    them.memory.icaAskedWho = true
     say("$MEGAMOD_BANK_who_answer") --$ I am a representative of a...global conglomerate. We extend our services to wealthy and influential clients around the world. It just so happens that our agent in Chicago was...taken out of our portfolio recently. And we...and by "we" I mean the ICA, have decided to back YOU my friend. We believe you can help us. And by helping us, you help yourself. You may address me as "Mr. Smith."
     option("$MEGAMOD_BANK_continue", AfterQuestion) --$ Go on...
 end
 
 function WhyMe()
     askedWhyMe = true
-    them.icaAskedWhyMe = true
+    them.memory.icaAskedWhyMe = true
     say("$MEGAMOD_BANK_whyme_answer") --$ Because we have seen your ability to kill my friend, and killing is our business...and business is good.
     option("$MEGAMOD_BANK_continue", AfterQuestion) --$ Go on...
 end
 
 function AskWhyContract()
     askedWhyContract = true
-    them.icaAskedWhyContract = true
+    them.memory.icaAskedWhyContract = true
     say("$MEGAMOD_BANK_contract_answer") --$ Oh no, my friend, this is strictly a no questions asked business. I don't even know who wants this person dead, or why, and it doesn't matter one bit. I get paid to hire you to do the job, and we both get paid when the job is complete.
     option("$MEGAMOD_BANK_continue", AfterQuestion) --$ Go on...
 end
 
 function AskWhyMoney()
     askedWhyMoney = true
-    them.icaAskedWhyMoney = true
+    them.memory.icaAskedWhyMoney = true
     say("$MEGAMOD_BANK_money_answer") --$ We pay twenty because we can, and because we expect results that are worth twenty. You'll notice we're not haggling, we're not explaining ourselves, and we're certainly not repeating this conversation. The money answers your question better than I ever could -- now, do we have a deal or don't we?
     option("$MEGAMOD_BANK_continue", AfterQuestion) --$ Go on...
 end
@@ -238,20 +265,33 @@ function AcceptScreen()
 end
 
 function AcceptContract()
+    -- MEGAMOD FIX: refuse contracts on targets that died since the daily list was built
+    if not currentTarget or currentTarget:isDead() then
+        go(TargetAlreadyDead)
+        return
+    end
+
     contractActive = true
 
-    -- Store on actor so it persists and the mission monitor can read it
-    them.icaContractActive = true
-    them.icaActiveTarget = currentTarget
-    them.icaActiveTargetName = targetName
-    them.icaActiveTargetHood = targetNeighborhood
-    them.icaActiveTargetPrecinct = targetPrecinct
-    them.icaActiveTargetFaction = targetFaction
-    them.icaActiveTargetType = targetType
-    them.icaPendingMission = true
+    -- Store in actor memory so it survives save/load and the mission monitor can read it
+    them.memory.icaContractActive = true
+    them.memory.icaActiveTarget = currentTarget
+    them.memory.icaActiveTargetName = targetName
+    them.memory.icaActiveTargetHood = targetNeighborhood
+    them.memory.icaActiveTargetPrecinct = targetPrecinct
+    them.memory.icaActiveTargetFaction = targetFaction
+    them.memory.icaActiveTargetType = targetType
+    them.memory.icaPendingMission = true
+    them.memory.icaCancelContract = nil -- MEGAMOD FIX: never carry a stale cancel into a new contract
 
     say("$MEGAMOD_BANK_accepted") --$ Excellent. Make it clean. Come back to me when it's done and I'll have your twenty thousand waiting.
     option("$MEGAMOD_BANK_leave_accepted", Leave) --$ Consider it done
+end
+
+function TargetAlreadyDead()
+    say("$MEGAMOD_BANK_target_dead") --$ One moment, my friend...my sources report the target is already deceased. Someone beat you to it. No work, no payment. Allow me to find another name.
+    option("$MEGAMOD_BANK_new_target", OfferTarget) --$ Give me a new target
+    option("$MEGAMOD_BANK_leave_hired", Leave) --$ Maybe later
 end
 
 function RerollTarget()
@@ -311,29 +351,33 @@ function BackToStatus()
 end
 
 function CancelContract()
-    contractActive = false
-    currentTarget = nil
-    them.icaCancelContract = true
+    -- MEGAMOD FIX: if the mission was already created, flag it to fail itself
+    -- (a still-pending mission is cancelled by simply clearing icaPendingMission below)
+    if not them.memory.icaPendingMission then
+        them.memory.icaCancelContract = true
+    end
+    ClearContractState()
     say("$MEGAMOD_BANK_cancelled") --$ Your call. But the money would have been good. Come back if you change your mind.
     option("$MEGAMOD_BANK_new_after_cancel", OfferTarget) --$ Actually, give me a new target
     option("$MEGAMOD_BANK_leave_cancel", Leave) --$ I'll think about it
 end
 
 function PayOut()
+    -- MEGAMOD FIX: this is the ONLY $20k grant (the mission's cash reward is display-only)
     BRScript:PlayerAddCash(20000, "CASH.MISSION_REWARD")
-    contractActive = false
-    currentTarget = nil
-    them.icaContractActive = false
-    them.icaActiveTarget = nil
+    them.memory.icaContractCompleted = nil
+    ClearContractState()
     say("$MEGAMOD_BANK_payout") --$ Well done, my friend. The target is no longer a concern. Here is your twenty thousand. I may have another contract for you, if you are interested.
     option("$MEGAMOD_BANK_another", OfferTarget) --$ I could go again
     option("$MEGAMOD_BANK_leave_paid", Leave) --$ Pleasure doing business
 end
 
 function TargetJoinedPlayer()
-    contractActive = false
-    currentTarget = nil
-    them.icaCancelContract = true
+    -- MEGAMOD FIX: void the contract; fail the running mission if one was created
+    if not them.memory.icaPendingMission then
+        them.memory.icaCancelContract = true
+    end
+    ClearContractState()
     say("$MEGAMOD_BANK_target_hired") --$ It appears the target is now in your employ. We cannot have you eliminating your own people. The contract is void. Allow me to find another name.
     option("$MEGAMOD_BANK_new_target", OfferTarget) --$ Give me a new target
     option("$MEGAMOD_BANK_leave_hired", Leave) --$ Maybe later
@@ -351,53 +395,13 @@ _namespace = "BEHAVIOURS"
 _id = "MEGAMOD_ICAREP_BEHAVIOUR"
 _name = "MegaModICARepBehaviour"
 
-function onAdd()
-    thisActor:setConversationEntryPoint("MegaMod_ICARep_Start")
-    refreshTargets()
-end
-
-function GameEvent.onDayBegin(e)
-    refreshTargets()
-
-    -- If there's an active contract, ensure the target is accessible
-    if thisActor.icaContractActive and thisActor.icaActiveTarget then
-        ensureTargetAccessible(thisActor.icaActiveTarget)
-    end
-
-    -- Create mission if contract was accepted in conversation
-    if thisActor.icaPendingMission then
-        thisActor.icaPendingMission = nil
-        -- Move target outside before starting the mission
-        if thisActor.icaActiveTarget then
-            ensureTargetAccessible(thisActor.icaActiveTarget)
-        end
-        WorldUtils:startMission("MegaModICAContract",
-            "targetActor", thisActor.icaActiveTarget,
-            "targetName", thisActor.icaActiveTargetName or "$MEGAMOD_ICA_unknown",
-            "targetHood", thisActor.icaActiveTargetHood or "$MEGAMOD_ICA_unknown",
-            "targetPrecinct", thisActor.icaActiveTargetPrecinct or "$MEGAMOD_ICA_unknown",
-            "targetFaction", thisActor.icaActiveTargetFaction or "$MEGAMOD_ICA_unknown",
-            "targetType", thisActor.icaActiveTargetType or "$MEGAMOD_ICA_unknown",
-            "icaRepActor", thisActor
-        )
-    end
-
-    -- Handle contract cancellation
-    if thisActor.icaCancelContract then
-        thisActor.icaCancelContract = nil
-        thisActor.icaContractActive = false
-        thisActor.icaActiveTarget = nil
-        thisActor.icaActiveTargetName = nil
-        thisActor.icaActiveTargetHood = nil
-        thisActor.icaActiveTargetPrecinct = nil
-        thisActor.icaActiveTargetFaction = nil
-        thisActor.icaActiveTargetType = nil
-    end
-end
-
+-- MEGAMOD FIX: helpers must be plain GLOBAL functions declared before first use.
+-- As `local function`s they had no sandbox env (WorldUtils was nil inside them), and
+-- ensureTargetAccessible was declared AFTER its caller, so the call site saw nil and
+-- contract missions never started.
 -- Move a target to the street if they're in a rival-owned building the player
 -- can't enter. Teleports them to the exterior of their current neighborhood.
-local function ensureTargetAccessible(target)
+function ensureTargetAccessible(target)
     if not target or target:isDead() then return end
 
     local targetLocId = target:getLocationId()
@@ -432,12 +436,48 @@ local function ensureTargetAccessible(target)
     end
 end
 
-local function getPrecinctKey(member)
+function getPrecinctKey(member) -- MEGAMOD FIX: global (was local function, see above)
     local precinctObj = member.getPrecinct and member:getPrecinct()
     if precinctObj and precinctObj.name then
         return precinctObj.name
     end
     return nil
+end
+
+function onAdd()
+    thisActor:setConversationEntryPoint("MegaMod_ICARep_Start")
+    refreshTargets()
+end
+
+function GameEvent.onDayBegin(e)
+    refreshTargets()
+
+    -- If there's an active contract, ensure the target is accessible
+    if thisActor.memory.icaContractActive and thisActor.memory.icaActiveTarget then
+        ensureTargetAccessible(thisActor.memory.icaActiveTarget)
+    end
+
+    -- Create mission if contract was accepted in conversation
+    if thisActor.memory.icaPendingMission then
+        thisActor.memory.icaPendingMission = nil
+        -- Move target outside before starting the mission
+        if thisActor.memory.icaActiveTarget then
+            ensureTargetAccessible(thisActor.memory.icaActiveTarget)
+        end
+        WorldUtils:startMission("MegaModICAContract",
+            "targetActor", thisActor.memory.icaActiveTarget,
+            "targetName", thisActor.memory.icaActiveTargetName or "$MEGAMOD_ICA_unknown",
+            "targetHood", thisActor.memory.icaActiveTargetHood or "$MEGAMOD_ICA_unknown",
+            "targetPrecinct", thisActor.memory.icaActiveTargetPrecinct or "$MEGAMOD_ICA_unknown",
+            "targetFaction", thisActor.memory.icaActiveTargetFaction or "$MEGAMOD_ICA_unknown",
+            "targetType", thisActor.memory.icaActiveTargetType or "$MEGAMOD_ICA_unknown",
+            "icaRepActor", thisActor
+        )
+    end
+
+    -- MEGAMOD FIX: cancellation of a running mission is handled by the mission script
+    -- itself (EliminateTargetCheck watches icaCancelContract); a not-yet-created mission
+    -- is cancelled in the conversation by clearing icaPendingMission.
 end
 
 function refreshTargets()
@@ -518,18 +558,16 @@ function refreshTargets()
     end
 
     -- Separate gangsters from civilians/thugs so gangsters are offered more often
+    -- MEGAMOD FIX: dropped unused icaRepOthers. These lists are intentionally
+    -- transient (ad-hoc fields, rebuilt every day begin) - do not move to memory.
     local gangsters = {}
-    local others = {}
     for i = 1, #candidates do
         if candidates[i].targetType == "$MEGAMOD_ICA_type_gangster" then
             gangsters[#gangsters + 1] = candidates[i]
-        else
-            others[#others + 1] = candidates[i]
         end
     end
     thisActor.icaRepTargets = candidates
     thisActor.icaRepGangsters = gangsters
-    thisActor.icaRepOthers = others
 end
 
 --[[------------------------------------------------------------------------------
@@ -577,19 +615,36 @@ end
 function onMissionStart()
     addObjective("EliminateTarget")
     addPOI(targetActor, "MISSION_TARGET", "EliminateTarget")
-    addCashReward(20000, false, true)
+    -- MEGAMOD FIX: alreadyGiven=true makes this display-only; Mr. Smith hands over the
+    -- $20k in conversation (PayOut). Was addCashReward(20000, false, true) = paid twice.
+    addCashReward(20000, true)
 end
 
 function onMissionSuccess()
+    -- MEGAMOD FIX: only queue the payout if the contract is still live
+    -- (not already paid out or cancelled in conversation)
+    if icaRepActor and icaRepActor.memory.icaContractActive then
+        icaRepActor.memory.icaContractCompleted = true
+    end
     if icaRepActor then
-        icaRepActor.icaContractCompleted = true
+        icaRepActor.memory.icaCancelContract = nil
     end
 end
 
 function onMissionFail()
+    -- MEGAMOD FIX: clear ALL contract state (was only 2 of the fields)
     if icaRepActor then
-        icaRepActor.icaContractActive = false
-        icaRepActor.icaActiveTarget = nil
+        local mem = icaRepActor.memory
+        mem.icaContractActive = nil
+        mem.icaActiveTarget = nil
+        mem.icaActiveTargetName = nil
+        mem.icaActiveTargetHood = nil
+        mem.icaActiveTargetPrecinct = nil
+        mem.icaActiveTargetFaction = nil
+        mem.icaActiveTargetType = nil
+        mem.icaPendingMission = nil
+        mem.icaContractCompleted = nil
+        mem.icaCancelContract = nil
     end
 end
 
@@ -601,6 +656,13 @@ function EliminateTarget()
 end
 
 function EliminateTargetCheck()
+    -- MEGAMOD FIX: player called off the contract at Mr. Smith - fail this mission
+    -- (vanilla pattern: failMission inside a Check fn, cf. PlayingTheMarketMission)
+    if icaRepActor and icaRepActor.memory.icaCancelContract then
+        icaRepActor.memory.icaCancelContract = nil
+        failMission("$MEGAMOD_ICA_mission_cancelled")
+        return false
+    end
     return targetActor and targetActor:isDead()
 end
 

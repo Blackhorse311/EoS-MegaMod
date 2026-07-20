@@ -1,7 +1,8 @@
 --[[------------------------------------------------------------------------------
     MegaMod: Safehouse NPC Manager
     Spawns copies of MegaMod NPCs into all player safehouses, not just the
-    primary one. Listens for onSafehouseAcquired to populate new safehouses.
+    primary one. Listens for onSafehouseAcquired to populate new safehouses
+    and onSafehouseUnacquired to despawn clones from lost ones.
 
     NPCs managed:
     - Evodio "Smokes" Zinna (The Cleaner) - NPC.MEGAMOD_CONTRACT_BROKER
@@ -14,10 +15,9 @@
     NOT managed: Mr. Smith (ICA Rep) - too tightly coupled to mission system.
     Mr. Smith remains in the primary safehouse only.
 
-    Category A NPCs (Cleaner, Recruiter, Renovator) have support events that
-    reference file-scoped persist{} variables. Their behaviours have been
-    modified to proxy data through the primary actor, so clones using the same
-    behaviour name work correctly.
+    Category A NPCs (Cleaner, Recruiter, Renovator) have support events. Their
+    behaviours hand work to those events via scheduleWithDelay varargs, so
+    clones using the same behaviour name work correctly.
 
     Category B NPCs (Fence, Lawyer, Vet) have fully self-contained behaviours
     and need no special handling.
@@ -27,15 +27,17 @@ _namespace = "WORLD_EVENTS"
 _id = "MEGAMOD_SAFEHOUSE_MANAGER"
 _event = "MegaModSafehouseManager"
 _gameStage = "Bridging"
-_autoStartMode = "Schedule"
-_triggerDelay = 300
+_autoStartMode = "Create" -- MEGAMOD FIX: "Schedule" events die after first trigger; "Create" + disableAutoComplete = permanent listener
 _category = "Misc"
 
+-- MEGAMOD FIX: keyed by safehouse locationId (stable across save/load, unlike
+-- tostring()). Primary safehouse maps to true (original spawn events populate it);
+-- other safehouses map to the list of spawned clone actor iids so they can be
+-- despawned if the safehouse is lost.
 persist{}
 spawnedSafehouses = {}
-initialized = false
 
--- NPC registry: configId, behaviourName, and whether to set homeSafehouse
+-- NPC registry: configId, behaviourName, and whether to set home safehouse
 local NPC_REGISTRY = {
     { configId = "NPC.MEGAMOD_CONTRACT_BROKER", behaviourName = "MegaModBrokerBehaviour",     setHome = true  },
     { configId = "NPC.MEGAMOD_RECRUITER",       behaviourName = "MegaModRecruiterBehaviour",   setHome = true  },
@@ -45,25 +47,46 @@ local NPC_REGISTRY = {
     { configId = "NPC.MEGAMOD_VETERINARIAN",    behaviourName = "MegaModVetBehaviour",         setHome = false },
 }
 
-function canTrigger()
-    return true
+function onCreate()
+    disableAutoComplete()
 end
 
-function onTrigger()
-    -- Initial population: spawn NPCs into all existing non-primary safehouses
+function GameEvent.onDayBegin(e)
+    -- Idempotent daily sweep: initial population plus catch-up for anything missed
     populateAllSafehouses()
-    initialized = true
-    complete()
 end
 
 function GameEvent.onSafehouseAcquired(e)
-    if not initialized then return end
     if not e or not e.faction or not e.faction.isPlayerFaction then return end
     local building = e.target
     if not building then return end
-    local key = tostring(building)
-    if spawnedSafehouses[key] then return end
+    local playerFaction = WorldUtils:getPlayerFaction()
+    if playerFaction and building == playerFaction:getPrimarySafehouse() then
+        -- Original spawn events put NPCs in the primary safehouse
+        spawnedSafehouses[building:getLocationId()] = true
+        return
+    end
+    if spawnedSafehouses[building:getLocationId()] then return end
     spawnNPCsIntoSafehouse(building)
+end
+
+-- MEGAMOD FIX: despawn clones when a safehouse is lost; clearing the key lets a
+-- re-acquired safehouse repopulate
+function GameEvent.onSafehouseUnacquired(e)
+    if not e or not e.faction or not e.faction.isPlayerFaction then return end
+    local building = e.target
+    if not building then return end
+    local key = building:getLocationId()
+    local clones = spawnedSafehouses[key]
+    if type(clones) == "table" then
+        for i = 1, #clones do
+            local clone = ActorUtils:getActorFromId(clones[i])
+            if clone then
+                clone:delete()
+            end
+        end
+    end
+    spawnedSafehouses[key] = nil
 end
 
 function populateAllSafehouses()
@@ -74,23 +97,22 @@ function populateAllSafehouses()
     if not primarySafehouse then return end
 
     -- Mark primary as already handled (original spawn events put NPCs there)
-    spawnedSafehouses[tostring(primarySafehouse)] = true
+    spawnedSafehouses[primarySafehouse:getLocationId()] = true
 
     -- Get all player safehouses and populate any non-primary ones
     local allSafehouses = {}
     playerFaction:getSafehouses(allSafehouses)
     for i = 1, #allSafehouses do
         local sh = allSafehouses[i]
-        local key = tostring(sh)
-        if sh ~= primarySafehouse and not spawnedSafehouses[key] then
+        if sh ~= primarySafehouse and not spawnedSafehouses[sh:getLocationId()] then
             spawnNPCsIntoSafehouse(sh)
         end
     end
 end
 
 function spawnNPCsIntoSafehouse(safehouse)
-    local key = tostring(safehouse)
-    spawnedSafehouses[key] = true
+    local clones = {}
+    spawnedSafehouses[safehouse:getLocationId()] = clones
 
     for i = 1, #NPC_REGISTRY do
         local entry = NPC_REGISTRY[i]
@@ -99,8 +121,10 @@ function spawnNPCsIntoSafehouse(safehouse)
             safehouse:enter(clone, "IDLE", true)
             clone.behaviours:add(entry.behaviourName)
             if entry.setHome then
-                clone.homeSafehouse = safehouse
+                -- MEGAMOD FIX: actor.memory is save-durable; ad-hoc fields are not
+                clone.memory.megamodHomeSafehouse = safehouse
             end
+            clones[#clones + 1] = clone.iid
         end
     end
 end
