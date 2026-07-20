@@ -10,12 +10,12 @@ _namespace = "ITEM.WEAPON"
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_EXOTIC_SAWEDOFF"
 _includes = {"ITEM.WEAPON.SHOTGUN"}
-inventoryTooltip = desc
 
 name = "$MEGAMOD_EXOTIC_SAWEDOFF_name" --$ Sawed-Off Special
 imageCaption = "$MEGAMOD_EXOTIC_SAWEDOFF_caption" --$ Sawed-Off Special
 modifierName = "$MEGAMOD_EXOTIC_SAWEDOFF_modifierName" --$ Sawed-Off Special
 desc = "$MEGAMOD_EXOTIC_SAWEDOFF_desc" --$ A shotgun with its barrel crudely hacked short. What it loses in range it makes up for in sheer close-quarters terror. The spread is so wide you could clear a room without aiming.
+inventoryTooltip = desc -- MEGAMOD FIX: assignments run in order, so this must come after desc
 
 item = {}
 item.rarity = "Epic"
@@ -55,12 +55,12 @@ prefab = "Models/Items/Weapons/Prefabs/Weapon_Shotgun_ShortBarreled"
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_EXOTIC_DERRINGER"
 _includes = {"ITEM.WEAPON.HAND_GUN"}
-inventoryTooltip = desc
 
 name = "$MEGAMOD_EXOTIC_DERRINGER_name" --$ Pocket Derringer
 imageCaption = "$MEGAMOD_EXOTIC_DERRINGER_caption" --$ Pocket Derringer
 modifierName = "$MEGAMOD_EXOTIC_DERRINGER_modifierName" --$ Pocket Derringer
 desc = "$MEGAMOD_EXOTIC_DERRINGER_desc" --$ A tiny two-shot pistol that fits in a vest pocket. Favored by gamblers and ladies of the evening, the Derringer is the ultimate last resort. Two shots is all you get, so make them count.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Rare"
@@ -99,12 +99,12 @@ prefab = "Models/Items/Weapons/Prefabs/Weapon_Handgun_SW38"
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_EXOTIC_HOWITZER"
 _includes = {"ITEM.WEAPON.SHOTGUN"}
-inventoryTooltip = desc
 
 name = "$MEGAMOD_EXOTIC_HOWITZER_name" --$ Street Howitzer
 imageCaption = "$MEGAMOD_EXOTIC_HOWITZER_caption" --$ Street Howitzer
 modifierName = "$MEGAMOD_EXOTIC_HOWITZER_modifierName" --$ Street Howitzer
 desc = "$MEGAMOD_EXOTIC_HOWITZER_desc" --$ A reinforced double-barrel shotgun loaded with heavy slugs. It kicks like a mule and hits like a freight train. One blast and whatever was standing in front of you isn't anymore.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Epic"
@@ -143,13 +143,13 @@ prefab = "Models/Items/Weapons/Prefabs/Weapon_Shotgun_Remmy10"
     WHIPPET GUN - Compact, fast-firing SMG
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_EXOTIC_WHIPPET"
-_includes = {"ITEM.WEAPON.SUB_GUN"}
-inventoryTooltip = desc
+_includes = {"ITEM.WEAPON.SUBMACHINE_GUN"}
 
 name = "$MEGAMOD_EXOTIC_WHIPPET_name" --$ Whippet Gun
 imageCaption = "$MEGAMOD_EXOTIC_WHIPPET_caption" --$ Whippet Gun
 modifierName = "$MEGAMOD_EXOTIC_WHIPPET_modifierName" --$ Whippet Gun
 desc = "$MEGAMOD_EXOTIC_WHIPPET_desc" --$ A cut-down submachine gun small enough to hide under a coat. It rattles off rounds so fast the barrel glows red. Low damage per hit, but when you're putting that much lead in the air, accuracy is optional.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Rare"
@@ -192,12 +192,12 @@ combatAbility = "GeneralBurstFire"
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_EXOTIC_MARESLEG"
 _includes = {"ITEM.WEAPON.RIFLE"}
-inventoryTooltip = desc
 
 name = "$MEGAMOD_EXOTIC_MARESLEG_name" --$ Mare's Leg
 imageCaption = "$MEGAMOD_EXOTIC_MARESLEG_caption" --$ Mare's Leg
 modifierName = "$MEGAMOD_EXOTIC_MARESLEG_modifierName" --$ Mare's Leg
 desc = "$MEGAMOD_EXOTIC_MARESLEG_desc" --$ A lever-action rifle with the stock and barrel chopped down to pistol size. Fast to draw, easy to handle in tight spaces, and still packs the punch of a full rifle round. A favorite of bounty hunters and stagecoach guards.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Rare"
@@ -223,7 +223,7 @@ price = 4200
 audio =
 {
     onFire = "AUDIO.COMBAT.SM99_SHOT",
-    onReload = "AUDIO.COMBAT.SM99_RELOAD",
+    onReload = "AUDIO.COMBAT.RIFLE_RELOAD", -- MEGAMOD FIX: vanilla SM-99 reload; SM99_RELOAD doesn't exist
     onCantFire = "AUDIO.COMBAT.GUN_CANT_FIRE",
 }
 
@@ -236,12 +236,12 @@ prefab = "Models/Items/Weapons/Prefabs/Weapon_Rifle_Salvage99"
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_EXOTIC_TRENCHRAIDER"
 _includes = {"ITEM.WEAPON.HAND_GUN"}
-inventoryTooltip = desc
 
 name = "$MEGAMOD_EXOTIC_TRENCHRAIDER_name" --$ Trench Raider
 imageCaption = "$MEGAMOD_EXOTIC_TRENCHRAIDER_caption" --$ Trench Raider
 modifierName = "$MEGAMOD_EXOTIC_TRENCHRAIDER_modifierName" --$ Trench Raider
 desc = "$MEGAMOD_EXOTIC_TRENCHRAIDER_desc" --$ A modified military pistol with a hair trigger and extended magazine. Veterans brought these back from the trenches of the Great War, and the ones who kept them tend to sleep with one eye open. Double-tap capability makes it lethal up close.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Epic"
@@ -271,7 +271,7 @@ price = 5800
 audio =
 {
     onFire = "AUDIO.COMBAT.CULT_M1911_SHOT",
-    onReload = "AUDIO.COMBAT.M1911_RELOAD",
+    onReload = "AUDIO.COMBAT.PISTOL_RELOAD", -- MEGAMOD FIX: vanilla M1911 reload; M1911_RELOAD doesn't exist
     onCantFire = "AUDIO.COMBAT.GUN_CANT_FIRE",
 }
 

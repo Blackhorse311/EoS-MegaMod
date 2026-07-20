@@ -10,18 +10,18 @@ _namespace = "ITEM.WEAPON"
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_LEGENDARY_UNDERTAKER"
 _includes = {"ITEM.WEAPON.HAND_GUN"}
-inventoryTooltip = desc
 
 name = "$MEGAMOD_LEG_UNDERTAKER_name" --$ The Undertaker
 imageCaption = "$MEGAMOD_LEG_UNDERTAKER_caption" --$ The Undertaker
 modifierName = "$MEGAMOD_LEG_UNDERTAKER_modifierName" --$ The Undertaker
 desc = "$MEGAMOD_LEG_UNDERTAKER_desc" --$ A jet-black revolver with a coffin etched into the grip. Its previous owner was a mortician who moonlighted as an enforcer. He always said business was good either way.
+inventoryTooltip = desc -- MEGAMOD FIX: assignments run in order, so this must come after desc
 
 item = {}
 item.rarity = "Legendary"
 item.type = "Handgun"
 item.slotType = "Secondary"
-animatorBool = "Weapon_HANDGUN_06"
+animatorBool = "Weapon_HANDGUN_01" -- MEGAMOD FIX: vanilla New Service Revolver anim; HANDGUN_06 doesn't exist
 
 minDamage = 26
 maxDamage = 40
@@ -48,13 +48,13 @@ prefab = "Models/Items/Weapons/Prefabs/Weapon_Handgun_CultNewService"
     "CHICAGO LIGHTNING" - Legendary SubGun, high fire rate
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_LEGENDARY_LIGHTNING"
-_includes = {"ITEM.WEAPON.SUB_GUN"}
-inventoryTooltip = desc
+_includes = {"ITEM.WEAPON.SUBMACHINE_GUN"}
 
 name = "$MEGAMOD_LEG_LIGHTNING_name" --$ Chicago Lightning
 imageCaption = "$MEGAMOD_LEG_LIGHTNING_caption" --$ Chicago Lightning
 modifierName = "$MEGAMOD_LEG_LIGHTNING_modifierName" --$ Chicago Lightning
 desc = "$MEGAMOD_LEG_LIGHTNING_desc" --$ A Thompson with every moving part polished to perfection. It fires so fast and so smooth that witnesses describe the sound as one continuous thunderclap. When the lightning strikes, nobody's left standing.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Legendary"
@@ -80,9 +80,10 @@ score = 720
 price = 14000
 
 audio = { onFire = "AUDIO.COMBAT.TOMMY_GUN_BURST", onReload = "AUDIO.COMBAT.TOMMY_GUN_RELOAD", onCantFire = "AUDIO.COMBAT.GUN_CANT_FIRE" }
-hudIcon = "Sprites/Images/Items/Weapons/Weapon_SubGun_Thompson1921_Drum"
-inventoryIcon = "Sprites/Images/Items/Weapons/Weapon_SubGun_Thompson1921_Drum"
-prefab = "Models/Items/Weapons/Prefabs/Weapon_SubGun_Thompson1921_Drum"
+-- MEGAMOD FIX: "Weapon_SubGun_Thompson1921_Drum" doesn't exist; M1921AC art matches animator Weapon_SUBGUN_02
+hudIcon = "Sprites/Images/Items/Weapons/Weapon_SubmachineGun_Thompson1921AC"
+inventoryIcon = "Sprites/Images/Items/Weapons/Weapon_SubmachineGun_Thompson1921AC"
+prefab = "Models/Items/Weapons/Prefabs/Weapon_SubmachineGun_Thompson1921AC"
 combatAbility = "GeneralBurstFire"
 
 --[[------------------------------------------------------------------------------
@@ -90,18 +91,18 @@ combatAbility = "GeneralBurstFire"
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_LEGENDARY_LASTWORD"
 _includes = {"ITEM.WEAPON.SHOTGUN"}
-inventoryTooltip = desc
 
 name = "$MEGAMOD_LEG_LASTWORD_name" --$ The Last Word
 imageCaption = "$MEGAMOD_LEG_LASTWORD_caption" --$ The Last Word
 modifierName = "$MEGAMOD_LEG_LASTWORD_modifierName" --$ The Last Word
 desc = "$MEGAMOD_LEG_LASTWORD_desc" --$ A custom-bored shotgun that fires slugs the size of your thumb. It's called The Last Word because in any argument, this gun always gets the final say. Devastating at close range. Useless everywhere else.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Legendary"
 item.type = "Shotgun"
 item.slotType = "Primary"
-animatorBool = "Weapon_SHOTGUN_05"
+animatorBool = "Weapon_SHOTGUN_03" -- MEGAMOD FIX: vanilla Sjogren anim; SHOTGUN_05 doesn't exist
 
 minDamage = 30
 maxDamage = 65
@@ -129,18 +130,18 @@ prefab = "Models/Items/Weapons/Prefabs/Weapon_Shotgun_Sjogren"
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_LEGENDARY_WHISPER"
 _includes = {"ITEM.WEAPON.SNIPER_RIFLE"}
-inventoryTooltip = desc
 
 name = "$MEGAMOD_LEG_WHISPER_name" --$ Whisper
 imageCaption = "$MEGAMOD_LEG_WHISPER_caption" --$ Whisper
 modifierName = "$MEGAMOD_LEG_WHISPER_modifierName" --$ Whisper
 desc = "$MEGAMOD_LEG_WHISPER_desc" --$ A precision sniper rifle with a custom-machined barrel that's eerily quiet. The shot arrives before the sound does. Armor means nothing to this weapon -- the rounds punch through steel plate like paper.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Legendary"
-item.type = "SniperRifle"
+item.type = "Sniper" -- MEGAMOD FIX: vanilla uses "Sniper", not "SniperRifle"
 item.slotType = "Primary"
-animatorBool = "Weapon_SNIPER_01"
+animatorBool = "Weapon_SNIPER_02" -- MEGAMOD FIX: vanilla Springfield M1903 anim; SNIPER_01 doesn't exist
 
 minDamage = 55
 maxDamage = 75
@@ -150,7 +151,7 @@ actionCost = 1
 clipSize = 5
 ammoPerShot = 1
 
-range = "VERY_FAR"
+range = "VERYLONG"
 Modifier.overwatchAngle = function() return 25, modifierName end
 Modifier.overwatchRange = function() return 18, modifierName end
 Modifier.ignoreArmorChance = function() return 75, modifierName end
@@ -158,7 +159,7 @@ Modifier.ignoreArmorChance = function() return 75, modifierName end
 score = 750
 price = 15000
 
-audio = { onFire = { "AUDIO.COMBAT.SPRINGFIELD_SHOT_1", "AUDIO.COMBAT.SPRINGFIELD_SHOT_2", "AUDIO.COMBAT.SPRINGFIELD_SHOT_3", }, onReload = "AUDIO.COMBAT.SPRINGFIELD_RELOAD", onCantFire = "AUDIO.COMBAT.GUN_CANT_FIRE" }
+audio = { onFire = "AUDIO.COMBAT.SPRINGFIELD_1903_SHOT", onReload = "AUDIO.COMBAT.RIFLE_RELOAD", onCantFire = "AUDIO.COMBAT.GUN_CANT_FIRE" }
 hudIcon = "Sprites/Images/Items/Weapons/Weapon_Rifle_SpringfieldM1903"
 inventoryIcon = "Sprites/Images/Items/Weapons/Weapon_Rifle_SpringfieldM1903"
 prefab = "Models/Items/Weapons/Prefabs/Weapon_Rifle_SpringfieldM1903"
@@ -168,18 +169,18 @@ prefab = "Models/Items/Weapons/Prefabs/Weapon_Rifle_SpringfieldM1903"
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_LEGENDARY_NEGOTIATOR"
 _includes = {"ITEM.WEAPON.RIFLE"}
-inventoryTooltip = desc
 
 name = "$MEGAMOD_LEG_NEGOTIATOR_name" --$ The Negotiator
 imageCaption = "$MEGAMOD_LEG_NEGOTIATOR_caption" --$ The Negotiator
 modifierName = "$MEGAMOD_LEG_NEGOTIATOR_modifierName" --$ The Negotiator
 desc = "$MEGAMOD_LEG_NEGOTIATOR_desc" --$ A heavy-caliber rifle that hits so hard it rearranges the furniture. The Negotiator doesn't ask twice. One shot puts them on the floor, the next keeps them there.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Legendary"
 item.type = "Rifle"
 item.slotType = "Primary"
-animatorBool = "Weapon_RIFLE_04"
+animatorBool = "Weapon_RIFLE_02" -- MEGAMOD FIX: vanilla Gewehr 98 anim; RIFLE_04 doesn't exist
 
 minDamage = 45
 maxDamage = 62
@@ -189,7 +190,7 @@ actionCost = 1
 clipSize = 5
 ammoPerShot = 1
 
-range = "FAR"
+range = "LONG"
 Modifier.overwatchAngle = function() return 45, modifierName end
 Modifier.overwatchRange = function() return 14, modifierName end
 Modifier.knockBackChance = function() return 60, modifierName end
@@ -198,7 +199,7 @@ Modifier.Slow = function() return 30, modifierName end
 score = 680
 price = 12000
 
-audio = { onFire = { "AUDIO.COMBAT.GEWEHR_SHOT_1", "AUDIO.COMBAT.GEWEHR_SHOT_2", "AUDIO.COMBAT.GEWEHR_SHOT_3", "AUDIO.COMBAT.GEWEHR_SHOT_4", }, onReload = "AUDIO.COMBAT.GEWEHR_RELOAD", onCantFire = "AUDIO.COMBAT.GUN_CANT_FIRE" }
+audio = { onFire = "AUDIO.COMBAT.GEWEHR98_SHOT", onReload = "AUDIO.COMBAT.RIFLE_RELOAD", onCantFire = "AUDIO.COMBAT.GUN_CANT_FIRE" }
 hudIcon = "Sprites/Images/Items/Weapons/Weapon_Rifle_Gewehr98"
 inventoryIcon = "Sprites/Images/Items/Weapons/Weapon_Rifle_Gewehr98"
 prefab = "Models/Items/Weapons/Prefabs/Weapon_Rifle_Gewehr98"
@@ -208,12 +209,12 @@ prefab = "Models/Items/Weapons/Prefabs/Weapon_Rifle_Gewehr98"
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_LEGENDARY_SWEEPER"
 _includes = {"ITEM.WEAPON.SHOTGUN"}
-inventoryTooltip = desc
 
 name = "$MEGAMOD_LEG_SWEEPER_name" --$ Trench Sweeper
 imageCaption = "$MEGAMOD_LEG_SWEEPER_caption" --$ Trench Sweeper
 modifierName = "$MEGAMOD_LEG_SWEEPER_modifierName" --$ Trench Sweeper
 desc = "$MEGAMOD_LEG_SWEEPER_desc" --$ A military-grade trench shotgun brought back from the Great War. It was designed to clear dugouts and it's just as good at clearing speakeasies. The wide spread means you don't need to aim -- just point and pull.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Legendary"
@@ -247,12 +248,12 @@ prefab = "Models/Items/Weapons/Prefabs/Weapon_Shotgun_WinstonModel1897"
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_LEGENDARY_TYPEWRITER"
 _includes = {"ITEM.WEAPON.MACHINE_GUN"}
-inventoryTooltip = desc
 
 name = "$MEGAMOD_LEG_TYPEWRITER_name" --$ The Typewriter
 imageCaption = "$MEGAMOD_LEG_TYPEWRITER_caption" --$ The Typewriter
 modifierName = "$MEGAMOD_LEG_TYPEWRITER_modifierName" --$ The Typewriter
 desc = "$MEGAMOD_LEG_TYPEWRITER_desc" --$ A Lewis Gun with a custom oversized drum magazine. They call it The Typewriter because it writes your name in lead on the wall behind you. Forty rounds of continuous fire will level just about anything.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Legendary"
@@ -270,14 +271,14 @@ ammoPerShot = 1
 burstFire = 5
 burstFireMarksmanshipPenalty = -15
 
-range = "FAR"
+range = "LONG"
 Modifier.overwatchAngle = function() return 75, modifierName end
 Modifier.overwatchRange = function() return 16, modifierName end
 
 score = 740
 price = 15000
 
-audio = { onFire = "AUDIO.COMBAT.LEWIS_GUN_BURST", onReload = "AUDIO.COMBAT.LEWIS_GUN_RELOAD", onCantFire = "AUDIO.COMBAT.GUN_CANT_FIRE" }
+audio = { onFire = "AUDIO.COMBAT.BROWN_1918_AUTO_SHOT", onReload = "AUDIO.COMBAT.TOMMY_GUN_RELOAD", onCantFire = "AUDIO.COMBAT.GUN_CANT_FIRE" }
 hudIcon = "Sprites/Images/Items/Weapons/Weapon_MachineGun_LewisGun"
 inventoryIcon = "Sprites/Images/Items/Weapons/Weapon_MachineGun_LewisGun"
 prefab = "Models/Items/Weapons/Prefabs/Weapon_MachineGun_LewisGun"
@@ -288,12 +289,12 @@ combatAbility = "GeneralBurstFire"
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_LEGENDARY_DEVILSHAND"
 _includes = {"ITEM.WEAPON.HAND_GUN"}
-inventoryTooltip = desc
 
 name = "$MEGAMOD_LEG_DEVILSHAND_name" --$ Devil's Right Hand
 imageCaption = "$MEGAMOD_LEG_DEVILSHAND_caption" --$ Devil's Right Hand
 modifierName = "$MEGAMOD_LEG_DEVILSHAND_modifierName" --$ Devil's Right Hand
 desc = "$MEGAMOD_LEG_DEVILSHAND_desc" --$ A blood-red M1911 with a pearl grip carved in the shape of a grinning skull. Legend has it the gun was won in a poker game from a man who died the next day. Every owner since has had impeccable aim and terrible luck.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Legendary"
@@ -317,7 +318,7 @@ Modifier.Poisoned = function() return 35, modifierName end
 score = 580
 price = 11000
 
-audio = { onFire = "AUDIO.COMBAT.CULT_M1911_SHOT", onReload = "AUDIO.COMBAT.M1911_RELOAD", onCantFire = "AUDIO.COMBAT.GUN_CANT_FIRE" }
+audio = { onFire = "AUDIO.COMBAT.CULT_M1911_SHOT", onReload = "AUDIO.COMBAT.PISTOL_RELOAD", onCantFire = "AUDIO.COMBAT.GUN_CANT_FIRE" }
 hudIcon = "Sprites/Images/Items/Weapons/Weapon_Handgun_Cult1911"
 inventoryIcon = "Sprites/Images/Items/Weapons/Weapon_Handgun_Cult1911"
 prefab = "Models/Items/Weapons/Prefabs/Weapon_Handgun_Cult1911"

@@ -10,13 +10,13 @@ _namespace = "ITEM.WEAPON"
     THE OUTFIT - Alphonse Capone: "Big Fella" (Thompson SMG)
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_BOSS_OUTFIT"
-_includes = {"ITEM.WEAPON.SUB_GUN"}
-inventoryTooltip = desc
+_includes = {"ITEM.WEAPON.SUBMACHINE_GUN"}
 
 name = "$MEGAMOD_BOSS_OUTFIT_name" --$ Big Fella
 imageCaption = "$MEGAMOD_BOSS_OUTFIT_caption" --$ Big Fella
 modifierName = "$MEGAMOD_BOSS_OUTFIT_modifierName" --$ Big Fella
 desc = "$MEGAMOD_BOSS_OUTFIT_desc" --$ Capone's personal Thompson, engraved with his initials and fitted with a custom drum magazine. They say the gun has a mind of its own -- it doesn't miss, and it doesn't forgive.
+inventoryTooltip = desc -- MEGAMOD FIX: assignments run in order, so this must come after desc
 
 item = {}
 item.rarity = "Unique"
@@ -49,9 +49,10 @@ audio =
     onCantFire = "AUDIO.COMBAT.GUN_CANT_FIRE",
 }
 
-hudIcon = "Sprites/Images/Items/Weapons/Weapon_SubGun_Thompson1921_Drum"
-inventoryIcon = "Sprites/Images/Items/Weapons/Weapon_SubGun_Thompson1921_Drum"
-prefab = "Models/Items/Weapons/Prefabs/Weapon_SubGun_Thompson1921_Drum"
+-- MEGAMOD FIX: "Weapon_SubGun_Thompson1921_Drum" doesn't exist; M1921AC art matches animator Weapon_SUBGUN_02
+hudIcon = "Sprites/Images/Items/Weapons/Weapon_SubmachineGun_Thompson1921AC"
+inventoryIcon = "Sprites/Images/Items/Weapons/Weapon_SubmachineGun_Thompson1921AC"
+prefab = "Models/Items/Weapons/Prefabs/Weapon_SubmachineGun_Thompson1921AC"
 combatAbility = "GeneralBurstFire"
 
 --[[------------------------------------------------------------------------------
@@ -59,18 +60,18 @@ combatAbility = "GeneralBurstFire"
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_BOSS_NORTHSIDE"
 _includes = {"ITEM.WEAPON.HAND_GUN"}
-inventoryTooltip = desc
 
 name = "$MEGAMOD_BOSS_NORTHSIDE_name" --$ Florist's Shears
 imageCaption = "$MEGAMOD_BOSS_NORTHSIDE_caption" --$ Florist's Shears
 modifierName = "$MEGAMOD_BOSS_NORTHSIDE_modifierName" --$ Florist's Shears
 desc = "$MEGAMOD_BOSS_NORTHSIDE_desc" --$ O'Banion's silver-plated revolver, always tucked behind the flower arrangements. The bullets are tipped with something foul -- one graze and you'll be pushing up daisies.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Unique"
 item.type = "Handgun"
 item.slotType = "Secondary"
-animatorBool = "Weapon_HANDGUN_06"
+animatorBool = "Weapon_HANDGUN_01" -- MEGAMOD FIX: vanilla New Service Revolver anim; HANDGUN_06 doesn't exist
 
 minDamage = 22
 maxDamage = 34
@@ -104,12 +105,12 @@ prefab = "Models/Items/Weapons/Prefabs/Weapon_Handgun_CultNewService"
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_BOSS_WHITECITY"
 _includes = {"ITEM.WEAPON.RIFLE"}
-inventoryTooltip = desc
 
 name = "$MEGAMOD_BOSS_WHITECITY_name" --$ The Ringmaster
 imageCaption = "$MEGAMOD_BOSS_WHITECITY_caption" --$ The Ringmaster
 modifierName = "$MEGAMOD_BOSS_WHITECITY_modifierName" --$ The Ringmaster
 desc = "$MEGAMOD_BOSS_WHITECITY_desc" --$ Maggie's pride and joy -- a custom rifle with ivory inlays and a hair trigger. She learned to shoot in the circus, and every shot is a performance. The audience never applauds twice.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Unique"
@@ -125,7 +126,7 @@ actionCost = 1
 clipSize = 8
 ammoPerShot = 1
 
-range = "FAR"
+range = "LONG"
 Modifier.overwatchAngle = function() return 40, modifierName end
 Modifier.overwatchRange = function() return 14, modifierName end
 Modifier.marksmanship = function() return 15, modifierName end
@@ -149,18 +150,18 @@ prefab = "Models/Items/Weapons/Prefabs/Weapon_Rifle_FarquharHillRifle"
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_BOSS_RAGENS"
 _includes = {"ITEM.WEAPON.MELEE"}
-inventoryTooltip = desc
 
 name = "$MEGAMOD_BOSS_RAGENS_name" --$ The Derby
 imageCaption = "$MEGAMOD_BOSS_RAGENS_caption" --$ The Derby
 modifierName = "$MEGAMOD_BOSS_RAGENS_modifierName" --$ The Derby
 desc = "$MEGAMOD_BOSS_RAGENS_desc" --$ A lead-filled baseball bat wrapped in leather and studs. Ragen's boys use these to settle disputes at the stockyards, and the disputes always end the same way -- with somebody on the ground.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Unique"
 item.type = "Melee"
-item.slotType = "Secondary"
-animatorBool = "Weapon_MELEE_06"
+item.slotType = "Melee" -- MEGAMOD FIX: vanilla melee weapons use the "Melee" slot, not "Secondary"
+animatorBool = "Weapon_MELEE_11" -- MEGAMOD FIX: vanilla Baseball Bat anim (matches the bat model)
 
 minDamage = 35
 maxDamage = 55
@@ -170,18 +171,19 @@ actionCost = 1
 clipSize = 1
 ammoPerShot = 0
 
-range = "MELEE"
+range = 1.5 -- MEGAMOD FIX: melee range is numeric (vanilla MELEE base uses 1.5); "MELEE" is not a valid range id
 Modifier.knockBackChance = function() return 80, modifierName end
 Modifier.Slow = function() return 30, modifierName end
 
 score = 480
 price = 6000
 
+-- MEGAMOD FIX: vanilla Baseball Bat audio set (BASEBALL_BAT_* ids don't exist)
 audio =
 {
-    onFire = { "AUDIO.COMBAT.BASEBALL_BAT_HIT_1", "AUDIO.COMBAT.BASEBALL_BAT_HIT_2", "AUDIO.COMBAT.BASEBALL_BAT_HIT_3", },
-    onMiss = "AUDIO.COMBAT.BASEBALL_BAT_MISS",
-    onCrit = { "AUDIO.COMBAT.BASEBALL_BAT_HIT_1", },
+    onFire = { "AUDIO.COMBAT.NAILBAT_HIT_1", "AUDIO.COMBAT.NAILBAT_HIT_2", "AUDIO.COMBAT.NAILBAT_HIT_3", },
+    onMiss = "AUDIO.COMBAT.NAILBAT_MISS",
+    onCrit = { "AUDIO.COMBAT.NAILBAT_CRIT_1", },
 }
 
 hudIcon = "Sprites/Images/Items/Weapons/Weapon_Melee_BaseballBat"
@@ -193,12 +195,12 @@ prefab = "Models/Items/Weapons/Prefabs/Weapon_Melee_BaseballBat"
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_BOSS_DONOVANS"
 _includes = {"ITEM.WEAPON.SHOTGUN"}
-inventoryTooltip = desc
 
 name = "$MEGAMOD_BOSS_DONOVANS_name" --$ Irish Persuader
 imageCaption = "$MEGAMOD_BOSS_DONOVANS_caption" --$ Irish Persuader
 modifierName = "$MEGAMOD_BOSS_DONOVANS_modifierName" --$ Irish Persuader
 desc = "$MEGAMOD_BOSS_DONOVANS_desc" --$ Frankie brought this trench shotgun back from the Easter Rising. It's been modified with a bayonet lug and a hair trigger. When negotiations fail, the Persuader does the talking.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Unique"
@@ -238,18 +240,18 @@ prefab = "Models/Items/Weapons/Prefabs/Weapon_Shotgun_WinstonModel1897"
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_BOSS_VICEKINGS"
 _includes = {"ITEM.WEAPON.RIFLE"}
-inventoryTooltip = desc
 
 name = "$MEGAMOD_BOSS_VICEKINGS_name" --$ The Verdict
 imageCaption = "$MEGAMOD_BOSS_VICEKINGS_caption" --$ The Verdict
 modifierName = "$MEGAMOD_BOSS_VICEKINGS_modifierName" --$ The Verdict
 desc = "$MEGAMOD_BOSS_VICEKINGS_desc" --$ Jackson's personal rifle, polished to a mirror shine. He calls it The Verdict because once he lines up the shot, the sentence is final. No appeals, no stays of execution.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Unique"
 item.type = "Rifle"
 item.slotType = "Primary"
-animatorBool = "Weapon_RIFLE_04"
+animatorBool = "Weapon_RIFLE_02" -- MEGAMOD FIX: vanilla Gewehr 98 anim; RIFLE_04 doesn't exist
 
 minDamage = 42
 maxDamage = 56
@@ -259,7 +261,7 @@ actionCost = 1
 clipSize = 5
 ammoPerShot = 1
 
-range = "FAR"
+range = "LONG"
 Modifier.overwatchAngle = function() return 45, modifierName end
 Modifier.overwatchRange = function() return 14, modifierName end
 Modifier.marksmanship = function() return 12, modifierName end
@@ -270,8 +272,8 @@ price = 9500
 
 audio =
 {
-    onFire = { "AUDIO.COMBAT.GEWEHR_SHOT_1", "AUDIO.COMBAT.GEWEHR_SHOT_2", "AUDIO.COMBAT.GEWEHR_SHOT_3", "AUDIO.COMBAT.GEWEHR_SHOT_4", },
-    onReload = "AUDIO.COMBAT.GEWEHR_RELOAD",
+    onFire = "AUDIO.COMBAT.GEWEHR98_SHOT",
+    onReload = "AUDIO.COMBAT.RIFLE_RELOAD",
     onCantFire = "AUDIO.COMBAT.GUN_CANT_FIRE",
 }
 
@@ -284,12 +286,12 @@ prefab = "Models/Items/Weapons/Prefabs/Weapon_Rifle_Gewehr98"
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_BOSS_SALTIS"
 _includes = {"ITEM.WEAPON.MACHINE_GUN"}
-inventoryTooltip = desc
 
 name = "$MEGAMOD_BOSS_SALTIS_name" --$ Polka Dot Special
 imageCaption = "$MEGAMOD_BOSS_SALTIS_caption" --$ Polka Dot Special
 modifierName = "$MEGAMOD_BOSS_SALTIS_modifierName" --$ Polka Dot Special
 desc = "$MEGAMOD_BOSS_SALTIS_desc" --$ Saltis had this BAR customized with a polished walnut stock and extended magazine. He says the polka dots are the bullet holes he leaves in people's front doors. The neighbors have learned not to complain.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Unique"
@@ -317,8 +319,8 @@ price = 11000
 
 audio =
 {
-    onFire = "AUDIO.COMBAT.BAR_BURST",
-    onReload = "AUDIO.COMBAT.BAR_RELOAD",
+    onFire = "AUDIO.COMBAT.BROWN_1918_AUTO_SHOT", -- MEGAMOD FIX: vanilla BAR M1918 audio; BAR_BURST/BAR_RELOAD don't exist
+    onReload = "AUDIO.COMBAT.TOMMY_GUN_RELOAD",
     onCantFire = "AUDIO.COMBAT.GUN_CANT_FIRE",
 }
 
@@ -331,13 +333,13 @@ combatAbility = "GeneralBurstFire"
     LOS LUCEROS - Elvira Duarte: "El Relampago" (Fast SubGun)
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_BOSS_LOSLUCEROS"
-_includes = {"ITEM.WEAPON.SUB_GUN"}
-inventoryTooltip = desc
+_includes = {"ITEM.WEAPON.SUBMACHINE_GUN"}
 
 name = "$MEGAMOD_BOSS_LOSLUCEROS_name" --$ El Relampago
 imageCaption = "$MEGAMOD_BOSS_LOSLUCEROS_caption" --$ El Relampago
 modifierName = "$MEGAMOD_BOSS_LOSLUCEROS_modifierName" --$ El Relampago
 desc = "$MEGAMOD_BOSS_LOSLUCEROS_desc" --$ "The Lightning" -- Duarte's chrome-plated submachine gun fires so fast the muzzle flash looks like a thunderstorm. She had it smuggled across the border piece by piece, and she's never let it out of her sight since.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Unique"
@@ -366,7 +368,7 @@ price = 9000
 audio =
 {
     onFire = "AUDIO.COMBAT.SUBMACHINE_BURST",
-    onReload = "AUDIO.COMBAT.MP18_RELOAD",
+    onReload = "AUDIO.COMBAT.TOMMY_GUN_RELOAD", -- MEGAMOD FIX: vanilla MP 18 reload; MP18_RELOAD doesn't exist
     onCantFire = "AUDIO.COMBAT.GUN_CANT_FIRE",
 }
 
@@ -380,12 +382,12 @@ combatAbility = "GeneralBurstFire"
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_BOSS_FORTUNE"
 _includes = {"ITEM.WEAPON.HAND_GUN"}
-inventoryTooltip = desc
 
 name = "$MEGAMOD_BOSS_FORTUNE_name" --$ Crystal Ball
 imageCaption = "$MEGAMOD_BOSS_FORTUNE_caption" --$ Crystal Ball
 modifierName = "$MEGAMOD_BOSS_FORTUNE_modifierName" --$ Crystal Ball
 desc = "$MEGAMOD_BOSS_FORTUNE_desc" --$ Goldie's pearl-handled revolver, said to be charmed by a Voodoo priestess. She claims the gun tells her where to aim. Whether it's magic or marksmanship, the results speak for themselves.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Unique"
@@ -424,12 +426,12 @@ prefab = "Models/Items/Weapons/Prefabs/Weapon_Handgun_SW38"
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_BOSS_GENNA"
 _includes = {"ITEM.WEAPON.HAND_GUN"}
-inventoryTooltip = desc
 
 name = "$MEGAMOD_BOSS_GENNA_name" --$ The Sicilian
 imageCaption = "$MEGAMOD_BOSS_GENNA_caption" --$ The Sicilian
 modifierName = "$MEGAMOD_BOSS_GENNA_modifierName" --$ The Sicilian
 desc = "$MEGAMOD_BOSS_GENNA_desc" --$ Angelo's family heirloom -- a Vendetta pistol passed down from the old country. The Gennas coat the bullets in something they brew in the back of their distillery. Nobody knows what it is, but nobody wants to find out the hard way.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Unique"
@@ -457,7 +459,7 @@ price = 7500
 audio =
 {
     onFire = "AUDIO.COMBAT.CULT_SINGLE_SHOT",
-    onReload = "AUDIO.COMBAT.M1915_RELOAD",
+    onReload = "AUDIO.COMBAT.PISTOL_RELOAD", -- MEGAMOD FIX: vanilla Model 1915 reload; M1915_RELOAD doesn't exist
     onCantFire = "AUDIO.COMBAT.GUN_CANT_FIRE",
 }
 
@@ -470,18 +472,18 @@ prefab = "Models/Items/Weapons/Prefabs/Weapon_Handgun_Vendetta1915"
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_BOSS_CARDSHARKS"
 _includes = {"ITEM.WEAPON.HAND_GUN"}
-inventoryTooltip = desc
 
 name = "$MEGAMOD_BOSS_CARDSHARKS_name" --$ Ace in the Hole
 imageCaption = "$MEGAMOD_BOSS_CARDSHARKS_caption" --$ Ace in the Hole
 modifierName = "$MEGAMOD_BOSS_CARDSHARKS_modifierName" --$ Ace in the Hole
 desc = "$MEGAMOD_BOSS_CARDSHARKS_desc" --$ St. Clair's custom Mauser, fitted with armor-piercing rounds. She keeps it in a hidden holster and only draws it when the game is already won. By the time you see it, the hand's been dealt.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Unique"
 item.type = "Handgun"
 item.slotType = "Secondary"
-animatorBool = "Weapon_HANDGUN_05"
+animatorBool = "Weapon_HANDGUN_03" -- MEGAMOD FIX: vanilla Mauser C96 anim; HANDGUN_05 doesn't exist
 
 minDamage = 22
 maxDamage = 30
@@ -502,7 +504,7 @@ price = 8000
 audio =
 {
     onFire = "AUDIO.COMBAT.CULT_M1911_SHOT",
-    onReload = "AUDIO.COMBAT.MAUSER_RELOAD",
+    onReload = "AUDIO.COMBAT.PISTOL_RELOAD", -- MEGAMOD FIX: vanilla Mauser C96 reload; MAUSER_RELOAD doesn't exist
     onCantFire = "AUDIO.COMBAT.GUN_CANT_FIRE",
 }
 
@@ -515,18 +517,18 @@ prefab = "Models/Items/Weapons/Prefabs/Weapon_Handgun_MauserC96"
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_BOSS_LOSHIJOS"
 _includes = {"ITEM.WEAPON.SNIPER_RIFLE"}
-inventoryTooltip = desc
 
 name = "$MEGAMOD_BOSS_LOSHIJOS_name" --$ La Justicia
 imageCaption = "$MEGAMOD_BOSS_LOSHIJOS_caption" --$ La Justicia
 modifierName = "$MEGAMOD_BOSS_LOSHIJOS_modifierName" --$ La Justicia
 desc = "$MEGAMOD_BOSS_LOSHIJOS_desc" --$ "Justice" -- Reyna's scoped Mosin-Nagant, etched with the names of those who wronged his family. He takes his time lining up each shot, and when the bullet finds its mark, there's no recovering from it.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Unique"
-item.type = "SniperRifle"
+item.type = "Sniper" -- MEGAMOD FIX: vanilla uses "Sniper", not "SniperRifle"
 item.slotType = "Primary"
-animatorBool = "Weapon_SNIPER_06"
+animatorBool = "Weapon_SNIPER_02" -- MEGAMOD FIX: vanilla Mosin-Nagant anim; SNIPER_06 doesn't exist
 
 minDamage = 50
 maxDamage = 70
@@ -536,7 +538,7 @@ actionCost = 1
 clipSize = 5
 ammoPerShot = 1
 
-range = "VERY_FAR"
+range = "VERYLONG"
 Modifier.overwatchAngle = function() return 30, modifierName end
 Modifier.overwatchRange = function() return 16, modifierName end
 Modifier.injuryChance = function() return 50, modifierName end
@@ -544,10 +546,11 @@ Modifier.injuryChance = function() return 50, modifierName end
 score = 720
 price = 13000
 
+-- MEGAMOD FIX: vanilla Mosin-Nagant sniper audio; MOSIN_* ids don't exist
 audio =
 {
-    onFire = { "AUDIO.COMBAT.MOSIN_SHOT_1", "AUDIO.COMBAT.MOSIN_SHOT_2", "AUDIO.COMBAT.MOSIN_SHOT_3", },
-    onReload = "AUDIO.COMBAT.MOSIN_RELOAD",
+    onFire = "AUDIO.COMBAT.THOMPSON_M1921_SHOT",
+    onReload = "AUDIO.COMBAT.RIFLE_RELOAD",
     onCantFire = "AUDIO.COMBAT.GUN_CANT_FIRE",
 }
 
@@ -560,18 +563,18 @@ prefab = "Models/Items/Weapons/Prefabs/Weapon_Rifle_MosinM91"
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_BOSS_HIPSING"
 _includes = {"ITEM.WEAPON.SHOTGUN"}
-inventoryTooltip = desc
 
 name = "$MEGAMOD_BOSS_HIPSING_name" --$ Dragon's Breath
 imageCaption = "$MEGAMOD_BOSS_HIPSING_caption" --$ Dragon's Breath
 modifierName = "$MEGAMOD_BOSS_HIPSING_modifierName" --$ Dragon's Breath
 desc = "$MEGAMOD_BOSS_HIPSING_desc" --$ Mock's custom shotgun, loaded with incendiary shells smuggled from overseas. The muzzle flash is blinding and the payload burns through anything. His enemies call it the Dragon for good reason.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Unique"
 item.type = "Shotgun"
 item.slotType = "Primary"
-animatorBool = "Weapon_SHOTGUN_04"
+animatorBool = "Weapon_SHOTGUN_02" -- MEGAMOD FIX: vanilla Model 1912 anim; SHOTGUN_04 doesn't exist
 
 minDamage = 16
 maxDamage = 44
@@ -606,12 +609,12 @@ prefab = "Models/Items/Weapons/Prefabs/Weapon_Shotgun_WinstonModel12"
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_BOSS_ALLEYCATS"
 _includes = {"ITEM.WEAPON.HAND_GUN"}
-inventoryTooltip = desc
 
 name = "$MEGAMOD_BOSS_ALLEYCATS_name" --$ Nine Lives
 imageCaption = "$MEGAMOD_BOSS_ALLEYCATS_caption" --$ Nine Lives
 modifierName = "$MEGAMOD_BOSS_ALLEYCATS_modifierName" --$ Nine Lives
 desc = "$MEGAMOD_BOSS_ALLEYCATS_desc" --$ Mabel's lucky revolver -- she's survived nine assassination attempts with this gun in her hand. It's nothing special on paper, but whoever's holding it just seems to walk away from trouble. Every time.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Unique"
@@ -652,17 +655,17 @@ prefab = "Models/Items/Weapons/Prefabs/Weapon_Handgun_CultPolicePositiveSpecial"
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_BOSS_MEATPACKERS"
 _includes = {"ITEM.WEAPON.MELEE"}
-inventoryTooltip = desc
 
 name = "$MEGAMOD_BOSS_MEATPACKERS_name" --$ The Butcher's Bill
 imageCaption = "$MEGAMOD_BOSS_MEATPACKERS_caption" --$ The Butcher's Bill
 modifierName = "$MEGAMOD_BOSS_MEATPACKERS_modifierName" --$ The Butcher's Bill
 desc = "$MEGAMOD_BOSS_MEATPACKERS_desc" --$ O'Neill's favorite meat cleaver from the stockyards. He sharpens it every morning and carries it everywhere. Some say it's never been properly cleaned, and the stains on the blade aren't all from livestock.
+inventoryTooltip = desc
 
 item = {}
 item.rarity = "Unique"
 item.type = "Melee"
-item.slotType = "Secondary"
+item.slotType = "Melee" -- MEGAMOD FIX: vanilla melee weapons use the "Melee" slot, not "Secondary"
 animatorBool = "Weapon_MELEE_05"
 
 minDamage = 30
@@ -673,7 +676,7 @@ actionCost = 1
 clipSize = 1
 ammoPerShot = 0
 
-range = "MELEE"
+range = 1.5 -- MEGAMOD FIX: melee range is numeric (vanilla MELEE base uses 1.5); "MELEE" is not a valid range id
 Modifier.Bleeding = function() return 60, modifierName end
 
 score = 440
