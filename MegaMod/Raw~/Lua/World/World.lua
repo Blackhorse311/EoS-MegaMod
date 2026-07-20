@@ -1,4 +1,4 @@
-﻿--$$ Empire
+--$$ Empire
 
 local Audio = require("Libs.Audio")
 local WorldAudio = require("World.WorldAudio")
@@ -1453,6 +1453,7 @@ SaveState.defineSaveKeys(World,
     {"maxCrewSize"},
     {"isBossRunawayEnabled"},
     {"needCheckProductionYear"},
+    {"isEqualProficiencyLimit"},
     -- {"goldenWeaponsHaveProficiency"},
 })
 
@@ -1544,6 +1545,10 @@ function World.load()
     
     if World.needCheckProductionYear == nil then
         World.needCheckProductionYear = true
+    end
+
+    if World.isEqualProficiencyLimit == nil then
+        World.isEqualProficiencyLimit = false
     end
 
     loadLocationLocks()
@@ -2989,7 +2994,7 @@ function World.updateSetup()
 
         require("Libs.LootDropLib").setup()
         World.difficulty = settings:getInteger("difficulty", World.difficulty or 3)
-        World.maxCrewSize = settings:getInteger("maxCrewSize", World.maxCrewSize or 100)
+        World.maxCrewSize = settings:getInteger("maxCrewSize", World.maxCrewSize or 100) -- MEGAMOD: Increased Crew Size (10 -> 100)
         
         local bossRunawayEnabled = false
         if World.isBossRunawayEnabled ~= nil then
@@ -3004,6 +3009,13 @@ function World.updateSetup()
         end
         
         World.needCheckProductionYear = settings:getBool("needCheckProductionYear", needCheckProductionYear)
+
+        local isEqualProficiencyLimit = false
+        if World.isEqualProficiencyLimit ~= nil then
+            isEqualProficiencyLimit = World.isEqualProficiencyLimit
+        end
+
+        World.isEqualProficiencyLimit = settings:getBool("isEqualProficiencyLimit", isEqualProficiencyLimit)
         
         World.behaviours:add("Achievements")
         World.behaviours:add("NonStackableWorldModifierManager")

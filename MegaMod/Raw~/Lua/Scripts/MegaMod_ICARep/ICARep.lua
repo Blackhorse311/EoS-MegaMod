@@ -87,6 +87,36 @@ local contractActive = false
 -- MEGAMOD FIX: single place that wipes contract state so accept/payout/fail/cancel
 -- all leave the same clean slate (icaCancelContract handled separately by callers)
 function ClearContractState()
+    -- MEGAMOD ICA ACCESS: undo the building access grant on every contract end path.
+    -- The building object itself is stored in memory (vanilla pattern, cf.
+    -- stranger.memory.ChicagoPolitics_Derelict in MidGameEventMission).
+    local accessBuilding = them.memory.icaAccessBuilding
+    if accessBuilding and not accessBuilding.isDeleted then
+        WorldUtils:removeImportantForMissionBuilding(accessBuilding)
+    end
+    -- Restore the target's original faction only if the contract ended with them
+    -- alive AND they are still under our THUGS cover (a fulfilled contract leaves a
+    -- corpse; a target hired by the player must not be ripped out of the crew)
+    local accessTarget = them.memory.icaActiveTarget
+    local origFactionId = them.memory.icaTargetOrigFactionId
+    if accessTarget and origFactionId and not accessTarget.isDeleted
+        and not accessTarget:isDead()
+        and accessTarget.faction and accessTarget.faction.isThugFaction then
+        local origFaction = WorldUtils:getFactionById(origFactionId)
+        if origFaction then
+            accessTarget:setFaction(origFaction)
+        end
+    end
+    -- Disband any bodyguards the ICA hired for the target
+    local guards = them.memory.icaGuardSquad
+    if guards then
+        guards:removeFromSquads()
+    end
+    them.memory.icaAccessBuilding = nil
+    them.memory.icaTargetOrigFactionId = nil
+    them.memory.icaGuardSquad = nil
+    them.memory.icaSpawnGuards = nil
+
     contractActive = false
     currentTarget = nil
     targetName = nil
@@ -284,6 +314,31 @@ function AcceptContract()
     them.memory.icaPendingMission = true
     them.memory.icaCancelContract = nil -- MEGAMOD FIX: never carry a stale cancel into a new contract
 
+    -- MEGAMOD ICA ACCESS: if the target is holed up inside a rival-owned building,
+    -- the ICA burns their cover. The ImportantForMissionBuilding tag lets the player
+    -- walk in war-free (BUILDING_ENTER checks it before ownership/war checks), and
+    -- flipping the target to FACTION.THUGS means killing them triggers no faction
+    -- war. Rival safehouses/depots stay off-limits: the isSafehouseOrDepot branch of
+    -- BUILDING_ENTER.isVisible() takes precedence over the tag, so the daily street
+    -- teleport keeps handling those targets instead.
+    local targetLoc = WorldUtils:getLocationFromId(currentTarget:getLocationId())
+    if targetLoc and targetLoc.isInterior and targetLoc.building then
+        local building = targetLoc.building
+        local owner = building.faction
+        if owner and not owner.isPlayerFaction and not building.isSafehouseOrDepot then
+            them.memory.icaAccessBuilding = building
+            them.memory.icaTargetOrigFactionId = currentTarget.faction and currentTarget.faction.factionId
+            WorldUtils:addImportantForMissionBuilding(building)
+            local thugFaction = WorldUtils:getFactionById("FACTION.THUGS")
+            if thugFaction then
+                currentTarget:setFaction(thugFaction)
+            end
+            -- Bodyguards are spawned by the behaviour on day begin (squad utils are
+            -- verified in behaviour context; the mission starts on day begin anyway)
+            them.memory.icaSpawnGuards = true
+        end
+    end
+
     say("$MEGAMOD_BANK_accepted") --$ Excellent. Make it clean. Come back to me when it's done and I'll have your twenty thousand waiting.
     option("$MEGAMOD_BANK_leave_accepted", Leave) --$ Consider it done
 end
@@ -453,15 +508,37 @@ function GameEvent.onDayBegin(e)
     refreshTargets()
 
     -- If there's an active contract, ensure the target is accessible
-    if thisActor.memory.icaContractActive and thisActor.memory.icaActiveTarget then
+    -- MEGAMOD ICA ACCESS: skip targets with building access granted - they are
+    -- reachable where they are; teleporting them would defeat the access grant.
+    -- Safehouse/depot-dwellers and other inaccessible targets still get moved.
+    if thisActor.memory.icaContractActive and thisActor.memory.icaActiveTarget
+        and not thisActor.memory.icaAccessBuilding then
         ensureTargetAccessible(thisActor.memory.icaActiveTarget)
+    end
+
+    -- MEGAMOD ICA ACCESS: hire two thug bodyguards for a freshly covered target
+    -- (war-free fight: FACTION.THUGS combat never triggers faction war)
+    if thisActor.memory.icaSpawnGuards then
+        thisActor.memory.icaSpawnGuards = nil
+        local target = thisActor.memory.icaActiveTarget
+        local building = thisActor.memory.icaAccessBuilding
+        if target and not target.isDeleted and not target:isDead()
+            and building and not building.isDeleted
+            and target:getLocationId() == building.interiorLocationId then
+            local guards = MissionUtils:spawnSquad(3, nil, nil, 2)
+            if guards then
+                MissionUtils:placeSquad(guards, target:getLocationId(), target:getPos())
+                thisActor.memory.icaGuardSquad = guards
+            end
+        end
     end
 
     -- Create mission if contract was accepted in conversation
     if thisActor.memory.icaPendingMission then
         thisActor.memory.icaPendingMission = nil
         -- Move target outside before starting the mission
-        if thisActor.memory.icaActiveTarget then
+        -- MEGAMOD ICA ACCESS: unless building access was granted (see above)
+        if thisActor.memory.icaActiveTarget and not thisActor.memory.icaAccessBuilding then
             ensureTargetAccessible(thisActor.memory.icaActiveTarget)
         end
         WorldUtils:startMission("MegaModICAContract",
@@ -478,6 +555,24 @@ function GameEvent.onDayBegin(e)
     -- MEGAMOD FIX: cancellation of a running mission is handled by the mission script
     -- itself (EliminateTargetCheck watches icaCancelContract); a not-yet-created mission
     -- is cancelled in the conversation by clearing icaPendingMission.
+end
+
+-- MEGAMOD ICA ACCESS: when the player's selected character walks into the
+-- contracted building and the target is still inside, the target (and any
+-- bodyguards in the room) turn hostile - politician's-son pattern, cf.
+-- MidGameEventMission GameEvent.onEnterLocation / GuardIfFleeBehaviour
+function GameEvent.onEnterLocation(e)
+    local mem = thisActor.memory
+    if not mem.icaContractActive then return end
+    local building = mem.icaAccessBuilding
+    if not building or building.isDeleted then return end
+    local target = mem.icaActiveTarget
+    if not target or target.isDeleted or target:isDead() then return end
+    if e.locationId ~= building.interiorLocationId then return end
+    if target:getLocationId() ~= e.locationId then return end
+    local selectedChar = MissionUtils:selectedCharacter() or Character:getPlayer()
+    if not selectedChar or selectedChar:getLocationId() ~= e.locationId then return end
+    WorldUtils:startScenario("StartCombatOnLoadLoc", target, selectedChar)
 end
 
 function refreshTargets()
@@ -635,6 +730,29 @@ function onMissionFail()
     -- MEGAMOD FIX: clear ALL contract state (was only 2 of the fields)
     if icaRepActor then
         local mem = icaRepActor.memory
+        -- MEGAMOD ICA ACCESS: undo the building access grant (mirrors the
+        -- conversation's ClearContractState; a no-op when the conversation already
+        -- cleaned up before flagging this mission to fail)
+        local accessBuilding = mem.icaAccessBuilding
+        if accessBuilding and not accessBuilding.isDeleted then
+            WorldUtils:removeImportantForMissionBuilding(accessBuilding)
+        end
+        local accessTarget = mem.icaActiveTarget
+        if accessTarget and mem.icaTargetOrigFactionId and not accessTarget.isDeleted
+            and not accessTarget:isDead()
+            and accessTarget.faction and accessTarget.faction.isThugFaction then
+            local origFaction = WorldUtils:getFactionById(mem.icaTargetOrigFactionId)
+            if origFaction then
+                accessTarget:setFaction(origFaction)
+            end
+        end
+        if mem.icaGuardSquad then
+            mem.icaGuardSquad:removeFromSquads()
+        end
+        mem.icaAccessBuilding = nil
+        mem.icaTargetOrigFactionId = nil
+        mem.icaGuardSquad = nil
+        mem.icaSpawnGuards = nil
         mem.icaContractActive = nil
         mem.icaActiveTarget = nil
         mem.icaActiveTargetName = nil

@@ -265,7 +265,10 @@ function Character._get:weaponProficiencyMaxTier()
     if self.maxTier then
         return self.maxTier
     end
-    return #Config.DEFAULTS.CHARACTER.weaponProficiencyKillRequirement  -- MEGAMOD: Remove artificial tier cap, let kills gate progression naturally
+    
+    local maxLevel = #Config.DEFAULTS.CHARACTER.weaponProficiencyKillRequirement
+    
+    return maxLevel  -- MEGAMOD: Remove artificial tier cap, let kills gate progression naturally
 end
 
 function Character._set:weaponProficiencyMaxTier()
