@@ -409,7 +409,7 @@ function TooltipPopulation.populateBreweryTooltip(tooltip, building, hideTitle)
             tooltip:setIconColor("gold")
         end
         tooltip:setFaction(building.faction)
-        if not building:canSupplyOwner() then
+        if not building:canSupplyOwner() and not building.isQuestBuilding then
             tooltip:addData("$Format_Color", "stateNegative", "$PrecinctInfo_SupplyLineCutoff_Title")
         end
         if building.faction.isPlayerFaction then
@@ -419,7 +419,7 @@ function TooltipPopulation.populateBreweryTooltip(tooltip, building, hideTitle)
             local alcoholTypeName = (productionAmount == 0) and "$NothingItem" or Alcohol.getName(alcoholType)
             tooltip:addData("$Format_Colon2Elements", "$Building_Producing", alcoholTypeName)
             tooltip:addData("$Format_TwoItems", "$Format_Colon", "$Building_Stored", "$Format_Barrels", "$Format_FractionWholeNumber", building.storage.stored, building.storage.amount)
-        else
+        elseif not building.isQuestBuilding then
             local difficulty = building:getDifficultyRating()
             tooltip:addData("$Format_Colon2Elements", "$Settings_Difficulty", difficultyIcons[difficulty], difficultyColors[difficulty])
         end
@@ -443,7 +443,7 @@ function TooltipPopulation.populateConsumerRacketTooltip(tooltip, building, hide
             tooltip:setIconColor("gold")
         end
         tooltip:setFaction(building.faction)
-        if not building:canSupplyOwner() then
+        if not building:canSupplyOwner() and not building.isQuestBuilding then
             tooltip:addData("$Format_Color", "stateNegative", "$PrecinctInfo_SupplyLineCutoff_Title")
         end
         if building.faction.isPlayerFaction then
@@ -453,7 +453,7 @@ function TooltipPopulation.populateConsumerRacketTooltip(tooltip, building, hide
             end
             local consumptionAmount = building.data.consumption or 0
             tooltip:addData("$Format_Colon2Elements", "$Building_WeeklyConsumption", "$Format_Barrels", consumptionAmount)
-        else
+        elseif not building.isQuestBuilding then
             local difficulty = building:getDifficultyRating()
             tooltip:addData("$Format_Colon2Elements", "$Settings_Difficulty", difficultyIcons[difficulty], difficultyColors[difficulty])
         end
@@ -517,11 +517,27 @@ function TooltipPopulation.populateDerelictTooltip(tooltip, building, hideTitle)
 end
 
 function TooltipPopulation.populateLoanSharkRacketTooltip(tooltip, building, hideTitle)
-    if not building:canSupplyOwner() then
+    if not building:canSupplyOwner() and not building.isQuestBuilding then
         tooltip:addData("$Format_Color", "stateNegative", "$PrecinctInfo_SupplyLineCutoff_Title")
     end
-    tooltip:addObservedData(building.data, "$Format_Income", "income")
-    TooltipPopulation.populateSimpleRacketTooltip(tooltip, building, hideTitle, true)
+
+    if not building.isQuestBuilding then
+        tooltip:addObservedData(building.data, "$Format_Income", "income")
+    end
+    
+    TooltipPopulation.populateSimpleRacketTooltip(tooltip, building, hideTitle, not building.isQuestBuilding)
+end
+
+function TooltipPopulation.populateDanceClubRacketTooltip(tooltip, building, hideTitle)
+    if not building:canSupplyOwner() and not building.isQuestBuilding then
+        tooltip:addData("$Format_Color", "stateNegative", "$PrecinctInfo_SupplyLineCutoff_Title")
+    end
+
+    if not building.isQuestBuilding then
+        tooltip:addObservedData(building.data, "$Format_Income", "income")
+    end
+    
+    TooltipPopulation.populateSimpleRacketTooltip(tooltip, building, hideTitle, not building.isQuestBuilding)
 end
 
 function TooltipPopulation.populateSimpleRacketTooltip(tooltip, building, hideTitle, showDifficulty)
@@ -561,6 +577,7 @@ local buildingTooltipFunctions =
     Derelict = TooltipPopulation.populateDerelictTooltip,
     Hotel = TooltipPopulation.populateSimpleRacketTooltip,
     LoanShark = TooltipPopulation.populateLoanSharkRacketTooltip,
+    DanceClub = TooltipPopulation.populateDanceClubRacketTooltip,
 }
 
 local levelIcons =
@@ -859,6 +876,11 @@ function TooltipPopulation.populateRacketPurchaseTooltip(tooltip, building, opti
             tooltip:addAttributeSimpleData("$Format_Color", "stateNegative", "$Format_BulletEntry", cons[i])
         end
     end
+
+    if config.tooltipAdditionalDescription then
+        tooltip:addAttributeSimpleData("$Format_Color", "dullWhite", config.tooltipAdditionalDescription)
+    end
+    
     tooltip:setDescriptionText(config.tooltipDescription)
     tooltip:setupBackplates(true)
 end
@@ -1847,12 +1869,13 @@ function TooltipPopulation.populateCharacterInventory(tooltip, character, useRea
     local primaryWeapon = inventory.primaryWeapon
     local secondaryWeapon = inventory.secondaryWeapon
     local meleeWeapon = inventory.meleeWeapon
+    local leftHandWeapon = inventory.leftHand
     local equipment = inventory.equipment
     local utility1 = inventory.utility1
     local utility2 = inventory.utility2
 
-    if primaryWeapon or secondaryWeapon or meleeWeapon then
-        local numWeapons = (primaryWeapon and 1 or 0) + (secondaryWeapon and 1 or 0) + (meleeWeapon and 1 or 0)
+    if primaryWeapon or secondaryWeapon or meleeWeapon or leftHandWeapon then
+        local numWeapons = (primaryWeapon and 1 or 0) + (secondaryWeapon and 1 or 0) + (meleeWeapon and 1 or 0) + (leftHandWeapon and 1 or 0)
         tooltip:addData("$Format_Colon", numWeapons == 1 and "$weapon_noun" or "$Character_Sheet_Weapons")
     end
 
@@ -1876,6 +1899,19 @@ function TooltipPopulation.populateCharacterInventory(tooltip, character, useRea
 
     if meleeWeapon then
         tooltip:addData(getItemColorFormatString(meleeWeapon, true))
+    end
+
+    if leftHandWeapon then
+        if leftHandWeapon.gun then
+            local weaponAmmo = character.shooter:canReplaceSlotWithLeftHandWeapon(1) and inventory.primaryWeaponAmmo or character.shooter:canReplaceSlotWithLeftHandWeapon(2) and inventory.secondaryWeaponAmmo
+            if weaponAmmo and not weaponAmmo:get("isDefaultAmmo") then
+                tooltip:addData("$Format_TextAndTextInBrackets", getItemColorFormatString(leftHandWeapon, true), getItemColorFormatString(weaponAmmo))
+            else
+                tooltip:addData(getItemColorFormatString(leftHandWeapon, true))
+            end
+        else
+            tooltip:addData(getItemColorFormatString(leftHandWeapon, true))
+        end
     end
 
     if equipment then
@@ -1905,8 +1941,11 @@ function TooltipPopulation.populateCharacterRequiredNotoriety(tooltip, character
     if character:hasState("ForceHireable") then
         notorietyGate = 0
     else
-        notorietyGate = character.notorietyGate
-    end
+        local modifiedNotorietyGate = World.getModifiedValue("generic", "NOTORIETY_GATE_DISCOUNT", World.player.faction.factionId, character:getLocationId(), character:getPrecinctId(), character, character.notorietyGate)
+        local rpcModifiedNotorietyGate = math.round(modifiedNotorietyGate)
+        
+        notorietyGate = rpcModifiedNotorietyGate
+    end 
     tooltip:setIcon("Sprites/AllSharedUI/Icon_Notoriety")
     tooltip:setIconColor("gold")
     -- "$Required" --$ Required
@@ -1948,8 +1987,17 @@ end
 
 function TooltipPopulation.populateCharacterRole(tooltip, character)
     tooltip:setTitle("$Role")
-    tooltip:setSubtitle(character.rankName)
-    tooltip:setDescription("$TOOLTIPS_Role_Description_text")
+
+    local fixedRole = character.fixedRole
+    if fixedRole == nil then
+        --we use current rank and generic role description
+        tooltip:setSubtitle(character.rankName)
+        tooltip:setDescription("$TOOLTIPS_Role_Description_text")
+    else
+        tooltip:setSubtitle(fixedRole)
+        --we don't display the description, so far we don't need it
+        tooltip:setDescription("")
+    end
 end
 
 function TooltipPopulation.populateCharacterTier(tooltip, character)
@@ -1972,7 +2020,12 @@ end
 
 function TooltipPopulation.populateCharacterLoyalty(tooltip, character)
     tooltip:setTitle("$Format_Colon2Elements", "$RPC_Review_Loyalty", "$Format_FractionWholeNumber", character.loyalty:get(), character.loyalty:getMax())
-    tooltip:setDescription("$TOOLTIPS_Loyalty_Description_text")
+    if character.isGangster then
+        tooltip:setDescription("$TOOLTIPS_Loyalty_Description_text")
+    else
+        tooltip:setDescription("")
+    end
+
 end
 
 function TooltipPopulation.populateCharacterMorale(tooltip, character)
@@ -2326,11 +2379,21 @@ function TooltipPopulation.populatePoliceActivityTooltip(tooltip, precinct)
         tooltip:addData("$Format_Color", "stateNegative", "$Format_BulletEntry", "$Format_TwoItems", "$Format_Colon", "$Combat_Kills", "$Format_SignedNumber2DecimalPlaces", precinct._temporaryPoliceActivity)
     end
 
+    local state
+    
     local buildings = precinct.buildings
     for i = 1, #buildings do
         local cur = buildings[i]
         if cur.data.criminalActivity > 0 then
-            tooltip:addData("$Format_Color", "stateNegative", "$Format_BulletEntry", "$Format_TwoItems", "$Format_Colon", cur.name, "$Format_SignedNumber2DecimalPlaces", cur.data.criminalActivity)
+            -- print("populatePoliceActivityTooltip():", "building =", cur, "criminalActivity =", cur.data.criminalActivity)
+            state = "stateNegative"
+        elseif cur.data.criminalActivity < 0 then
+            -- print("populatePoliceActivityTooltip():", "building =", cur, "criminalActivity =", cur.data.criminalActivity)
+            state = "statePositive" 
+        end
+
+        if cur.data.criminalActivity ~= 0 then
+            tooltip:addData("$Format_Color", state, "$Format_BulletEntry", "$Format_TwoItems", "$Format_Colon", cur.name, "$Format_SignedNumber2DecimalPlaces", cur.data.criminalActivity)
         end
     end
     tooltip:setDescription("$TOOLTIPS_PoliceActivity_Description_text")
@@ -2343,42 +2406,20 @@ function TooltipPopulation.populateRaidChanceTooltip(tooltip, precinct)
 end
 
 function TooltipPopulation.populatePrecinctDefendersTooltip(tooltip, precinct)
---[[ OLD CODE
-local defending, reinforcements = precinct:getDefenderCounts()
-    -- "$PrecinctInfo_Defenders_Title" --$ Defenders
-    -- "$PrecinctInfo_Defenders_Subtitle" --$ Reinforcements
-    tooltip:setTitle("$Format_Colon2Elements", "$PrecinctInfo_Defenders_Title", "$Format_Times", defending)
-    tooltip:setIcon("Sprites/AllSharedUI/Icon_Crew")
-    tooltip:setIconColor("gold")
-    if reinforcements > 0 then
-        tooltip:setSubtitle("$Format_Colon2Elements", "$PrecinctInfo_Defenders_Subtitle", "$Format_Times", reinforcements)
-        local round = 2
-        for _, building in next, precinct.racketBuildings do
-            if not building.damaged and building.faction == precinct.faction then
-                tooltip:addData("$PrecinctInfo_ReinforcementRound_Data", round, 2, building.name) --$ • Round {0}: x{1} from {2}.
-                round = round + 2
-            end
-        end
-    end
-    local depotString = precinct.primaryBuilding.isSafehouse and "$Safehouse" or "$Depot"
-    tooltip:setDescription("$PrecinctInfo_Defenders_Description", depotString) --$ How many defenders are guarding the {0}. Any equipped, undamaged rackets will supply the {0} with reinforcements during an attack.
-    ]]
-    -- NEW CODE
-    local precinctMax = "?"
-    local racketCapacity = "?"
-    local inRackets = "?"
+    -- MEGAMOD: Neighbourhood Overview repurposes this tooltip slot as the precinct
+    -- Customers surplus/deficit readout; defender details moved into
+    -- populatePrecinctDepotTooltip (player faction branch) below.
     tooltip:setTitle("$PrecinctInfo_Customers_TooltipTitle") --$ Customers
     tooltip:setDescription("$PrecinctInfo_Customers_Description") --$ The surplus or deficit of customers for this precinct. \nA negative number means that there is spare capacity in your rackets and you need to attract more customers to the precinct. \nA positive number indicates that there are more customers in the precinct than the rackets can handle and you need to increase the capacity in your rackets to maximise earnings.
-    -- END
 end
 
---MODIFIED - NEW CODE - NOT WORKING (may require UI changes)
+-- MEGAMOD: Neighbourhood Overview addition - tooltip for the netProduction element
+-- (hooked up in NeighborhoodOverviewController). Original mod author flagged this as
+-- possibly needing further UI changes.
 function TooltipPopulation.populatePrecinctConsumptionTooltip(tooltip, precinct)
-	tooltip:setTitle("$PrecinctInfo_Consumption_TooltipTitle") --$ Consumption
+    tooltip:setTitle("$PrecinctInfo_Consumption_TooltipTitle") --$ Consumption
     tooltip:setDescription("$PrecinctInfo_Consumption_Description") --$ The amount of alcohol being consumed by the rackets in this Precinct.
 end
---END 
-
 
 function TooltipPopulation.populatePrecinctDepotTooltip(tooltip, precinct)
     local depotBuilding = precinct.primaryBuilding
@@ -2398,29 +2439,23 @@ function TooltipPopulation.populatePrecinctDepotTooltip(tooltip, precinct)
         end
     end
     if precinct.faction.isPlayerFaction then
-    --NEW CODE
-    local defending, reinforcements = precinct:getDefenderCounts()
-    tooltip:setTitle("$Format_Colon2Elements", "$PrecinctInfo_Defenders_Title", "$Format_Times", defending)
-    if reinforcements > 0 then
-        tooltip:setSubtitle("$Format_Colon2Elements", "$PrecinctInfo_Defenders_Subtitle", "$Format_Times", reinforcements)
-        local round = 2
-        for _, building in next, precinct.racketBuildings do
-            if not building.damaged and building.faction == precinct.faction then
-                tooltip:addData("$PrecinctInfo_ReinforcementRound_Data2", round, 2, building.name) --$ • Round {0}: x{1} from {2}.
-                round = round + 2
+        -- MEGAMOD: Neighbourhood Overview - show defender/reinforcement details here
+        -- (the standalone defenders tooltip above was repurposed as the Customers tooltip).
+        local defending, reinforcements = precinct:getDefenderCounts()
+        tooltip:setTitle("$Format_Colon2Elements", "$PrecinctInfo_Defenders_Title", "$Format_Times", defending)
+        if reinforcements > 0 then
+            tooltip:setSubtitle("$Format_Colon2Elements", "$PrecinctInfo_Defenders_Subtitle", "$Format_Times", reinforcements)
+            local round = 2
+            for _, building in next, precinct.racketBuildings do
+                if not building.damaged and building.faction == precinct.faction then
+                    tooltip:addData("$PrecinctInfo_ReinforcementRound_Data2", round, 2, building.name) --$ • Round {0}: x{1} from {2}.
+                    round = round + 2
+                end
             end
         end
-    end
-    local depotString = precinct.primaryBuilding.isSafehouse and "$Safehouse" or "$Depot"
-    tooltip:setDescription("$PrecinctInfo_Defenders_Description2", depotString) --$ How many defenders are guarding the {0}. Any equipped, undamaged rackets will supply the {0} with reinforcements during an attack.
-    --END    
-        --[[ OLD CODE 
-        if isSafehouse then
-            tooltip:setDescription("$PrecinctInfo_PlayerSafehouse_Description") --$ Your safehouse is in this precinct. All other precincts will need to connect to this precinct in order for you to supply them.
-        else
-            tooltip:setDescription("$PrecinctInfo_PlayerDepot_Description") --$ You have a depot in this precinct. This precinct will need to connect to your safehouse in order for you to supply it.
-        end
-        ]]
+        local depotString = precinct.primaryBuilding.isSafehouse and "$Safehouse" or "$Depot"
+        tooltip:setDescription("$PrecinctInfo_Defenders_Description2", depotString) --$ How many defenders are guarding the {0}. Any equipped, undamaged rackets will supply the {0} with reinforcements during an attack.
+        -- MEGAMOD: end
     else
         if isSafehouse then
             tooltip:setDescription("$PrecinctInfo_EnemySafehouse_Description") --$ The enemy safehouse is in this precinct.

@@ -548,10 +548,11 @@ function ItemInfoController:populateBuildingInfo(building)
 
     self:startNewAttributeGroup()
     local income = building.data.income
+    -- MEGAMOD: Neighbourhood Overview income breakdown - gross/upkeep/net income plus
+    -- per-customer spend detail (replaces vanilla's single income + upkeep lines).
     local modifiers = 0
     local alcoholIncomeEffect = 0
     if building:earnsIncome() then -- Earns income
-        -- MODIFIED
         self:addAttributeData("$Building_Income_Gross", "$Format_Currency_Unsigned", income) --$ Gross Income {0}
         self:addAttributeData("$Building_Upkeep", "$Format_Currency_Unsigned", building.data.upkeep)
         local netIncome = income - building.data.upkeep
@@ -566,7 +567,7 @@ function ItemInfoController:populateBuildingInfo(building)
                 local consumptionRatio = precinct:getConsumptionRatio()
                 alcoholIncomeEffect = (consumptionRatio * (maxAlcoholIncomePercent - minAlcoholIncomePercent)) + minAlcoholIncomePercent
             end
-            local averageSpend = building._baseAverageSpend * modifiers * alcoholIncomeEffect --income / building.data.customerCount 
+            local averageSpend = building._baseAverageSpend * modifiers * alcoholIncomeEffect --income / building.data.customerCount
             self:addAttributeData("$Average_Spend", "$Format_Currency_Unsigned", averageSpend) --$ Average Income per Customer {0}
             self:addAttributeData("$Base_Spend", "$Format_Currency_Unsigned", building._baseAverageSpend) --$ Base Average Spend {0}
             self:addAttributeData("$Modifiers", "$Format_Number3DecimalPlaces", modifiers) --$ Modifers {0}
@@ -580,7 +581,7 @@ function ItemInfoController:populateBuildingInfo(building)
     if building.data.racketCustomerCapacity and (building.data.racketCustomerCapacity > 0) then
         self:addAttributeData("$Precinct_Customers", "$Format_FractionWholeNumber", building.data.customerCount, building.data.racketCustomerCapacity)
     end
-    -- END OF MOD
+    -- MEGAMOD: end income breakdown
 
     local titleConfig = Config.UPGRADE_VISUALS.TITLES
     local formatConfig = Config.UPGRADE_VISUALS.VALUE_FORMAT
@@ -589,14 +590,14 @@ function ItemInfoController:populateBuildingInfo(building)
 
     for k, v in next, buildingData do
         local name = titleConfig[k]
-        if name and v > 0 then
+        if name and v ~= 0 then
             if k ~= "suspicionEffect"
                 and k ~= "earnings"
                 and k ~= "income"
                 and k ~= "upkeep"
                 and k ~= "saleValue"
                 and k ~= "storageAmount"
-                and k ~= "racketCustomerCapacity" -- MODIFIED - added
+                and k ~= "racketCustomerCapacity" -- MEGAMOD: capacity already shown in the Customers line above
             then
                 self:addAttributeData(name, formatConfig[k], v)
             end
@@ -632,7 +633,9 @@ function ItemInfoController:populateAvailableRacketInfo(building)
     self:setSubtitle("$Format_BulletSeparatedStrings", "$Building_Unowned_Name", building:sizeName())
     self:setTitleIcon("Sprites/Icons/Buildings/Icon_Racket_Sale_W", "gold")
     local buildingConfig = ConfigBuilder.fromId(building.configId)
-    local racketOptions = building:getRacketOptions()
+
+    local racketOptions = building:getFactionRacketOptions(World.playerFaction)
+    
     if racketOptions then
         local faction = World.playerFaction
         self:startNewAttributeGroup()
@@ -780,8 +783,7 @@ end
 -- Population
 -- ------------------------------------------------------
 
-function ItemInfoController:populateGenericInfo(interface, info, itemPriceModifierId, inShopSellMode)
-    local item = interface.parent
+function ItemInfoController:populateGenericInfo(item, interface, info, itemPriceModifierId, inShopSellMode)
     local rarity = item:getRarity()
 
     local startedAttributeGroup = false
@@ -806,7 +808,7 @@ function ItemInfoController:populateGenericInfo(interface, info, itemPriceModifi
                 self:startNewAttributeGroup()
                 startedAttributeGroup = true
             end
-
+            
             if lineItem.isItemValue then
                 local title = inShopSellMode and "$Weapon_Buyback_Value" or "$Weapon_Info_Value"
                 local value = item:getBuyPrice(itemPriceModifierId)
@@ -841,8 +843,17 @@ function ItemInfoController:populateDamageItem(weapon, character)
     minDamage = playerFaction:modifyDamageWithDifficulty(minDamage)
     maxDamage = playerFaction:modifyDamageWithDifficulty(maxDamage)
 
-    self:setText("iconInfoText_1", "$Format_PairDash", minDamage, maxDamage)
-    self:setText("iconInfoText_2", "$Format_PairDash", weapon.damage.minCrit, weapon.damage.maxCrit)
+    if minDamage == maxDamage then
+        self:setText("iconInfoText_1", "$Format_Number", minDamage)
+    else    
+        self:setText("iconInfoText_1", "$Format_PairDash", minDamage, maxDamage)
+    end
+    
+    if weapon.damage.minCrit == weapon.damage.maxCrit then
+        self:setText("iconInfoText_2", "$Format_Number", weapon.damage.minCrit)
+    else
+        self:setText("iconInfoText_2", "$Format_PairDash", weapon.damage.minCrit, weapon.damage.maxCrit)
+    end
 
     local baseCritChance = weapon:get("baseCritChance")
     if baseCritChance then
@@ -882,22 +893,22 @@ end
 
 function ItemInfoController:populateWeaponInfo(weapon, character, itemPriceModifierId, inShopSellMode)
     self:populateDamageItem(weapon, character)
-    self:populateGenericInfo(weapon.gun, weaponInfo, itemPriceModifierId, inShopSellMode)
+    self:populateGenericInfo(weapon, weapon.gun, weaponInfo, itemPriceModifierId, inShopSellMode)
 end
 
 function ItemInfoController:populateMeleeWeaponInfo(weapon, character, itemPriceModifierId, inShopSellMode)
     self:populateDamageItem(weapon, character)
-    self:populateGenericInfo(weapon.melee, meleeInfo, itemPriceModifierId, inShopSellMode)
+    self:populateGenericInfo(weapon, weapon.melee, meleeInfo, itemPriceModifierId, inShopSellMode)
 end
 
 function ItemInfoController:populateExplosiveInfo(explosive, itemPriceModifierId, inShopSellMode)
     self:populateDamageItem(explosive)
-    self:populateGenericInfo(explosive.grenade, explosiveInfo, itemPriceModifierId, inShopSellMode)
+    self:populateGenericInfo(explosive, explosive.grenade, explosiveInfo, itemPriceModifierId, inShopSellMode)
 end
 
 function ItemInfoController:populateThrownInfo(weapon, itemPriceModifierId, inShopSellMode)
     self:populateDamageItem(weapon)
-    self:populateGenericInfo(weapon.missile, thrownInfo, itemPriceModifierId, inShopSellMode)
+    self:populateGenericInfo(weapon, weapon.missile, thrownInfo, itemPriceModifierId, inShopSellMode)
 end
 
 function ItemInfoController:populateAmmoInfo(ammo, itemPriceModifierId, inShopSellMode)
@@ -907,7 +918,7 @@ function ItemInfoController:populateAmmoInfo(ammo, itemPriceModifierId, inShopSe
     self:setImage("itemIconImage", ammo:get("inventoryIcon"))
     self:setDescriptionText( ammo:get("desc"))
 
-    self:populateGenericInfo(ammo.ammo, ammoInfo, itemPriceModifierId, inShopSellMode)
+    self:populateGenericInfo(ammo, ammo.ammo, ammoInfo, itemPriceModifierId, inShopSellMode)
 end
 
 function ItemInfoController:populateArmorInfo(armor, itemPriceModifierId, inShopSellMode)
@@ -921,7 +932,7 @@ function ItemInfoController:populateArmorInfo(armor, itemPriceModifierId, inShop
     local armorValue = armor.armor.current
     self:setAnchorMax("armorPointBar", armorValue/100, 1)
 
-    self:populateGenericInfo(armor.armor, armorInfo, itemPriceModifierId, inShopSellMode)
+    self:populateGenericInfo(armor, armor.armor, armorInfo, itemPriceModifierId, inShopSellMode)
 end
 
 function ItemInfoController:populateHealInfo(medKit, itemPriceModifierId, inShopSellMode)
@@ -935,7 +946,7 @@ function ItemInfoController:populateHealInfo(medKit, itemPriceModifierId, inShop
     local actionDescParams = medKit:get("actionDescParams")
     self:setDescriptionText( "$Format_TwoNewLines", desc, actionPanelDesc, actionDescParams)
 
-    self:populateGenericInfo(medKit.heal, healInfo, itemPriceModifierId, inShopSellMode)
+    self:populateGenericInfo(medKit, medKit.heal, healInfo, itemPriceModifierId, inShopSellMode)
 end
 
 function ItemInfoController:populateBandageInfo(bandage, itemPriceModifierId, inShopSellMode)
@@ -944,7 +955,7 @@ function ItemInfoController:populateBandageInfo(bandage, itemPriceModifierId, in
     self:setScale("itemIconImage", 1)
     self:setImage("itemIconImage", bandage:get("inventoryIcon"))
     self:setDescriptionText( bandage:get("desc"))
-    self:populateGenericInfo(bandage.bandage, bandageInfo, itemPriceModifierId, inShopSellMode)
+    self:populateGenericInfo(bandage, bandage.bandage, bandageInfo, itemPriceModifierId, inShopSellMode)
 end
 
 local modifierNames =
@@ -979,7 +990,7 @@ function ItemInfoController:populateAbilityInfo(item)
         self:setDescriptionText( actionPanelDesc, actionDescParams)
     end
 
-    self:populateGenericInfo(item.ability, nil)
+    self:populateGenericInfo(item, item.ability, nil)
 end
 
 function ItemInfoController:populateBasicInfo(item, itemPriceModifierId, inShopSellMode)
@@ -988,7 +999,7 @@ function ItemInfoController:populateBasicInfo(item, itemPriceModifierId, inShopS
     self:setScale("itemIconImage", 1)
     self:setImage("itemIconImage", item:get("inventoryIcon"))
     self:setDescriptionText( item:get("desc"))
-    self:populateGenericInfo(item.view, basicItemInfo, itemPriceModifierId, inShopSellMode)
+    self:populateGenericInfo(item, item.view, basicItemInfo, itemPriceModifierId, inShopSellMode)
 end
 
 function ItemInfoController:populateStateInfo(character, handle)
@@ -1042,7 +1053,7 @@ function ItemInfoController:populateFromStateId(stateId, character)
     self:setScale("itemIconImage", 0.75)
 
     if stateConfig.desc then
-        self:setDescriptionText( stateConfig.desc)
+        self:setDescriptionText(stateConfig.desc)
     end
 
     local modifierId = stateConfig.modifierId
@@ -1149,8 +1160,11 @@ end
 function ItemInfoController:populateItemInfo(item, character, itemPriceModifierId, inShopSellMode)
     self:clearInfo()
 
+    local name = item:get("name")
+    
+    --print(name)
     self:setActive("itemInfo", true)
-    self:setTitle(item:get("name"))
+    self:setTitle(name)
 
     local type = weaponTypeToStringKey[item:getType()]
     if type then
@@ -1180,7 +1194,7 @@ function ItemInfoController:populateItemInfo(item, character, itemPriceModifierI
     else
         local itemType = item:getType()
         local itemSlotType = item:getSlotType()
-        if itemSlotType == "Misc" or itemSlotType == "Utility" or itemType == "Trinket" or itemType == "Mission" then
+        if itemSlotType == "Misc" or itemSlotType == "Utility" or itemSlotType == "DogCollars" or itemType == "Trinket" or itemType == "Mission" then
             self:populateBasicInfo(item, itemPriceModifierId, inShopSellMode)
         end
     end

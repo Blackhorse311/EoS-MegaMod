@@ -204,7 +204,7 @@ storage = 500
 upkeep = 0
 
 --[[------------------------------------------------------------------------------
-Dance Club Sm Base Data (MEGAMOD: restored from current vanilla — Make It Count DLC)
+Dance Club Sm Base Data (MEGAMOD: restored from current vanilla - Make It Count DLC)
 --------------------------------------------------------------------------------]]
 
 _id = "DANCE_CLUB_SM_BASE_DATA"
@@ -232,3 +232,5 @@ name = "$RACKET_BASE_DATA_DANCE_CLUB_LG_BASE_DATA_name" --$ Large Dance Club
 baseAverageSpend = 2.25
 costId = "DANCE_CLUB_LG_COST"
 upkeep = 720
+
+

@@ -1522,7 +1522,7 @@ function TalkToWhiteHand()
         description = "$ConfrontTheWhiteHand", --$ Confront the White Hand.
     }
     local leadThug
-    if outsideThugs.members then
+    if insideThugs.members then  -- MEGAMOD: was outsideThugs (nil by this point, causing crash)
         local _, thug = next(insideThugs.members)
         leadThug = thug
     else
