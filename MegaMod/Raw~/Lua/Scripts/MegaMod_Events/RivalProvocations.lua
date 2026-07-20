@@ -7,32 +7,32 @@
 _namespace = "WORLD_EVENTS"
 
 --[[------------------------------------------------------------------------------
-    Provocation Monitor - Background listener
+    Provocation Monitor - director-driven listener
 --------------------------------------------------------------------------------]]
+-- MEGAMOD DIRECTOR: cadence (weekly 25% roll + own 14-day cooldown) now lives in
+-- EventDirector.lua (registry: RIVAL_PROVOCATION, cooldownDays 14). This block
+-- answers director picks: pass when ineligible, launch when eligible.
 _id = "MEGAMOD_PROVOCATION_MONITOR"
 _event = "MegaModProvocationMonitor"
 _gameStage = "Bridging"
 _autoStartMode = "Create" -- MEGAMOD FIX: Schedule-mode events are created inactive so GameEvent listeners never register; Create keeps the monitor alive (see HardModeBankroll.lua)
 _category = "Misc"
 
-persist{}
-lastProvocationTime = 0
+function GameEvent.onMegaModEventPick(e)
+    if not e or e.eventName ~= "RIVAL_PROVOCATION" then return end
 
-local provocationCooldownDays = 14
-local provocationChance = 0.25
-
-function GameEvent.onWeekBegin(e)
-    -- Cooldown check
-    if lastProvocationTime > 0 and (worldTime - lastProvocationTime) < Utils:daysToSecs(provocationCooldownDays) then
+    local playerFaction = WorldUtils:getPlayerFaction()
+    if not playerFaction then
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "RIVAL_PROVOCATION")
         return
     end
 
-    local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction then return end
-
     -- Need at least one known rival
     local knownGangs = playerFaction.diplomacy:getKnownGangs()
-    if not knownGangs or #knownGangs == 0 then return end
+    if not knownGangs or #knownGangs == 0 then
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "RIVAL_PROVOCATION")
+        return
+    end
 
     -- Collect active rivals
     local activeRivals = {}
@@ -41,20 +41,20 @@ function GameEvent.onWeekBegin(e)
             activeRivals[#activeRivals + 1] = knownGangs[i]
         end
     end
-    if #activeRivals == 0 then return end
+    if #activeRivals == 0 then
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "RIVAL_PROVOCATION")
+        return
+    end
 
-    -- Roll for trigger
-    if math.random() >= provocationChance then return end
-
-    -- Pick a random rival and provocation type
+    -- Pick a random rival and provocation type (outcome rolls, not cadence)
     local rival = activeRivals[math.random(1, #activeRivals)]
-    lastProvocationTime = worldTime
 
     -- MEGAMOD FIX: persist{} vars are not shared across _id blocks; pass the rival and
     -- provocation type through the event payload (factions are identified by factionId)
     WorldUtils:scheduleWithDelay("MegaModProvocationEvent", 5, "TICK",
         "provocationRivalFactionId", rival.factionId,
         "provocationTypeIndex", math.random(1, 3))
+    Utils:raiseGameEvent("onMegaModEventLaunched", "eventName", "RIVAL_PROVOCATION")
 end
 
 --[[------------------------------------------------------------------------------

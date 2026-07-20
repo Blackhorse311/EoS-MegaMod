@@ -7,32 +7,32 @@
 _namespace = "WORLD_EVENTS"
 
 --[[------------------------------------------------------------------------------
-    Hijacking Monitor - Background listener
+    Hijacking Monitor - director-driven listener
 --------------------------------------------------------------------------------]]
+-- MEGAMOD DIRECTOR: cadence (weekly 20% roll + own 21-day cooldown) now lives in
+-- EventDirector.lua (registry: BOOTLEG_HIJACK, cooldownDays 14). This block
+-- answers director picks: pass when ineligible, launch when eligible.
 _id = "MEGAMOD_HIJACK_MONITOR"
 _event = "MegaModHijackMonitor"
 _gameStage = "Bridging"
 _autoStartMode = "Create" -- MEGAMOD FIX: Schedule-mode events are created inactive so GameEvent listeners never register; Create keeps the monitor alive (see HardModeBankroll.lua)
 _category = "Misc"
 
-persist{}
-lastHijackTime = 0
+function GameEvent.onMegaModEventPick(e)
+    if not e or e.eventName ~= "BOOTLEG_HIJACK" then return end
 
-local hijackCooldownDays = 21
-local hijackChance = 0.20
-
-function GameEvent.onWeekBegin(e)
-    -- Cooldown check
-    if lastHijackTime > 0 and (worldTime - lastHijackTime) < Utils:daysToSecs(hijackCooldownDays) then
+    local playerFaction = WorldUtils:getPlayerFaction()
+    if not playerFaction then
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "BOOTLEG_HIJACK")
         return
     end
 
-    local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction then return end
-
     -- Need at least one known rival
     local knownGangs = playerFaction.diplomacy:getKnownGangs()
-    if not knownGangs or #knownGangs == 0 then return end
+    if not knownGangs or #knownGangs == 0 then
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "BOOTLEG_HIJACK")
+        return
+    end
 
     -- Collect active rivals
     local activeRivals = {}
@@ -41,18 +41,18 @@ function GameEvent.onWeekBegin(e)
             activeRivals[#activeRivals + 1] = knownGangs[i]
         end
     end
-    if #activeRivals == 0 then return end
+    if #activeRivals == 0 then
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "BOOTLEG_HIJACK")
+        return
+    end
 
-    -- Roll for trigger
-    if math.random() >= hijackChance then return end
-
-    -- Pick a random rival for flavor text
+    -- Pick a random rival for flavor text (outcome roll, not cadence)
     local rival = activeRivals[math.random(1, #activeRivals)]
-    lastHijackTime = worldTime
 
     -- MEGAMOD FIX: persist{} vars are not shared across _id blocks; pass the rival through
     -- the event payload instead (factions are identified by factionId, they have no .iid)
     WorldUtils:scheduleWithDelay("MegaModHijackEvent", 5, "TICK", "hijackRivalFactionId", rival.factionId)
+    Utils:raiseGameEvent("onMegaModEventLaunched", "eventName", "BOOTLEG_HIJACK")
 end
 
 --[[------------------------------------------------------------------------------

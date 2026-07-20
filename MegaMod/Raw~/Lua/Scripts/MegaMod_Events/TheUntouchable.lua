@@ -213,9 +213,13 @@ function onTrigger()
 end
 
 --[[------------------------------------------------------------------------------
-    UNTOUCHABLE MONITOR - Background listener
+    UNTOUCHABLE MONITOR - director-driven listener
     MEGAMOD FIX: "Schedule" events are created inactive so GameEvent listeners
     never fired; converted to the Create-listener pattern (see HardModeBankroll).
+    MEGAMOD DIRECTOR: cadence (weekly 12% roll) now lives in EventDirector.lua
+    (registry: UNTOUCHABLE, onceOnly). This block answers director picks: pass
+    when ineligible, launch when eligible. The stage fact stays the source of
+    truth for eligibility; the director's once-flag is a second layer.
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_UNTOUCHABLE_MONITOR"
 _event = "MegaModUntouchableMonitor"
@@ -223,25 +227,35 @@ _gameStage = "Bridging"
 _autoStartMode = "Create"
 _category = "Misc"
 
-function GameEvent.onWeekBegin(e)
+function GameEvent.onMegaModEventPick(e)
+    if not e or e.eventName ~= "UNTOUCHABLE" then return end
+
     -- Only trigger the initial warning; later stages chain via scheduleWithDelay
+    -- (listener stays alive here so the director always gets a pass reply)
     if (fact.MegaModUntouchableStage or 0) ~= 0 then
-        complete()
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "UNTOUCHABLE")
         return
     end
-    if worldTime < 300 then return end -- MEGAMOD FIX: preserves the old _triggerDelay = 300
+    if worldTime < 300 then -- MEGAMOD FIX: preserves the old _triggerDelay = 300
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "UNTOUCHABLE")
+        return
+    end
 
     local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction then return end
+    if not playerFaction then
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "UNTOUCHABLE")
+        return
+    end
 
     -- Require 5+ buildings
     local buildings = playerFaction.buildings
-    if not buildings or #buildings < 5 then return end
-
-    -- 12% chance per week once conditions are met
-    if math.random() < 0.12 then
-        fact.MegaModUntouchableStage = 1 -- gate immediately so the warning can't re-pitch
-        WorldUtils:scheduleWithDelay("MegaModUntouchableWarning", 5, "TICK")
-        complete() -- chain is self-driving from here; listener no longer needed
+    if not buildings or #buildings < 5 then
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "UNTOUCHABLE")
+        return
     end
+
+    fact.MegaModUntouchableStage = 1 -- gate immediately so the warning can't re-pitch
+    WorldUtils:scheduleWithDelay("MegaModUntouchableWarning", 5, "TICK")
+    Utils:raiseGameEvent("onMegaModEventLaunched", "eventName", "UNTOUCHABLE")
+    complete() -- chain is self-driving from here; listener no longer needed
 end

@@ -188,9 +188,13 @@ function turnHimIn()
 end
 
 --[[------------------------------------------------------------------------------
-    BLACK SOX MONITOR - Weekly listener
+    BLACK SOX MONITOR - director-driven listener
     MEGAMOD FIX: "Schedule" events are created inactive so GameEvent listeners
     never fired; converted to the Create-listener pattern (see HardModeBankroll).
+    MEGAMOD DIRECTOR: cadence (weekly 20% roll) now lives in EventDirector.lua
+    (registry: BLACK_SOX, onceOnly). This block answers director picks: pass
+    when ineligible, launch when eligible. The stage fact stays the source of
+    truth for eligibility; the director's once-flag is a second layer.
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_BLACKSOX_MONITOR"
 _event = "MegaModBlackSoxMonitor"
@@ -198,23 +202,38 @@ _gameStage = "Bridging"
 _autoStartMode = "Create"
 _category = "Misc"
 
-function GameEvent.onWeekBegin(e)
+function GameEvent.onMegaModEventPick(e)
+    if not e or e.eventName ~= "BLACK_SOX" then return end
+
     -- Only trigger the initial pitch; later stages chain via scheduleWithDelay
+    -- (listener stays alive here so the director always gets a pass reply)
     if (fact.MegaModBlackSoxStage or 0) ~= 0 then
-        complete()
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "BLACK_SOX")
         return
     end
-    if worldTime < 250 then return end -- MEGAMOD FIX: preserves the old _triggerDelay = 250
+    if worldTime < 250 then -- MEGAMOD FIX: preserves the old _triggerDelay = 250
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "BLACK_SOX")
+        return
+    end
 
     local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction then return end
+    if not playerFaction then
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "BLACK_SOX")
+        return
+    end
 
     -- Require $2000+
-    if not playerFaction.cash or playerFaction.cash.count < 2000 then return end
+    if not playerFaction.cash or playerFaction.cash.count < 2000 then
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "BLACK_SOX")
+        return
+    end
 
     -- Require at least one casino building
     local buildings = playerFaction.buildings
-    if not buildings then return end
+    if not buildings then
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "BLACK_SOX")
+        return
+    end
 
     local hasCasino = false
     for _, building in next, buildings do
@@ -226,12 +245,13 @@ function GameEvent.onWeekBegin(e)
             end
         end
     end
-    if not hasCasino then return end
-
-    -- 20% chance per week once requirements are met
-    if math.random() < 0.20 then
-        fact.MegaModBlackSoxStage = 1 -- gate immediately so we can't double-pitch
-        WorldUtils:scheduleWithDelay("MegaModBlackSoxPitch", 5, "TICK")
-        complete() -- chain is self-driving from here; listener no longer needed
+    if not hasCasino then
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "BLACK_SOX")
+        return
     end
+
+    fact.MegaModBlackSoxStage = 1 -- gate immediately so we can't double-pitch
+    WorldUtils:scheduleWithDelay("MegaModBlackSoxPitch", 5, "TICK")
+    Utils:raiseGameEvent("onMegaModEventLaunched", "eventName", "BLACK_SOX")
+    complete() -- chain is self-driving from here; listener no longer needed
 end

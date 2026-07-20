@@ -7,34 +7,34 @@
 _namespace = "WORLD_EVENTS"
 
 --[[------------------------------------------------------------------------------
-    Fed Raid Monitor - Background listener
+    Fed Raid Monitor - director-driven listener
 --------------------------------------------------------------------------------]]
+-- MEGAMOD DIRECTOR: cadence (escalating weekly chance + weeksSinceLastRaid
+-- counter) now lives in EventDirector.lua (registry: FED_RAIDS, cooldownDays 21).
+-- This block answers director picks: pass when ineligible, launch when eligible.
 _id = "MEGAMOD_FED_RAID_MONITOR"
 _event = "MegaModFedRaidMonitor"
 _gameStage = "Bridging"
-_autoStartMode = "Create" -- MEGAMOD FIX: Schedule+complete() unregistered onWeekBegin before it ever ran
+_autoStartMode = "Create" -- MEGAMOD FIX: Schedule+complete() unregistered listeners before they ever ran
 _category = "Misc"
 
-persist{}
-weeksSinceLastRaid = 0
-
-function GameEvent.onWeekBegin(e)
-    weeksSinceLastRaid = weeksSinceLastRaid + 1
+function GameEvent.onMegaModEventPick(e)
+    if not e or e.eventName ~= "FED_RAIDS" then return end
 
     local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction or not playerFaction.buildings then return end
+    if not playerFaction or not playerFaction.buildings then
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "FED_RAIDS")
+        return
+    end
 
     local buildingCount = #playerFaction.buildings
-    if buildingCount < 3 then return end
-
-    -- Base chance increases with empire size and time
-    local baseChance = 0.02 + (buildingCount * 0.008) + (weeksSinceLastRaid * 0.005)
-    baseChance = math.min(baseChance, 0.25) -- cap at 25%
-
-    if math.random() < baseChance then
-        weeksSinceLastRaid = 0
-        WorldUtils:scheduleWithDelay("MegaModFedRaidWarning", 5, "TICK")
+    if buildingCount < 3 then
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "FED_RAIDS")
+        return
     end
+
+    WorldUtils:scheduleWithDelay("MegaModFedRaidWarning", 5, "TICK")
+    Utils:raiseGameEvent("onMegaModEventLaunched", "eventName", "FED_RAIDS")
 end
 
 --[[------------------------------------------------------------------------------

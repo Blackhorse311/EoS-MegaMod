@@ -7,39 +7,37 @@
 _namespace = "WORLD_EVENTS"
 
 --[[------------------------------------------------------------------------------
-    Moonshiner Monitor - Background listener
+    Moonshiner Monitor - director-driven listener
 --------------------------------------------------------------------------------]]
+-- MEGAMOD DIRECTOR: cadence (weekly 30% roll + own 42-day cooldown) now lives in
+-- EventDirector.lua (registry: MOONSHINERS, cooldownDays 21). This block answers
+-- director picks: pass when ineligible, launch when eligible.
 _id = "MEGAMOD_MOONSHINER_MONITOR"
 _event = "MegaModMoonshinerMonitor"
 _gameStage = "Bridging"
 _autoStartMode = "Create" -- MEGAMOD FIX: Schedule-mode events are created inactive so GameEvent listeners never register; Create keeps the monitor alive (see HardModeBankroll.lua)
 _category = "Misc"
 
-persist{}
-lastMoonshineTime = 0
+local minFactionMembers = 4 -- also used by the dialog block's sendCrewOption below
 
-local moonshineCooldownDays = 42
-local moonshineChance = 0.30
-local minFactionMembers = 4
+function GameEvent.onMegaModEventPick(e)
+    if not e or e.eventName ~= "MOONSHINERS" then return end
 
-function GameEvent.onWeekBegin(e)
-    -- Cooldown check
-    if lastMoonshineTime > 0 and (worldTime - lastMoonshineTime) < Utils:daysToSecs(moonshineCooldownDays) then
+    local playerFaction = WorldUtils:getPlayerFaction()
+    if not playerFaction then
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "MOONSHINERS")
         return
     end
 
-    local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction then return end
-
     -- Need at least 4 faction members
     local members = playerFaction.members
-    if not members or #members < minFactionMembers then return end
+    if not members or #members < minFactionMembers then
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "MOONSHINERS")
+        return
+    end
 
-    -- Roll for trigger
-    if math.random() >= moonshineChance then return end
-
-    lastMoonshineTime = worldTime
     WorldUtils:scheduleWithDelay("MegaModMoonshinerEvent", 5, "TICK")
+    Utils:raiseGameEvent("onMegaModEventLaunched", "eventName", "MOONSHINERS")
 end
 
 --[[------------------------------------------------------------------------------

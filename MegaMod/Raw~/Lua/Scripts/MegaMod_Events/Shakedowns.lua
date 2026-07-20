@@ -6,35 +6,32 @@
 _namespace = "WORLD_EVENTS"
 
 --[[------------------------------------------------------------------------------
-    Shakedown Monitor - permanent day counter with ~2 week cooldown
+    Shakedown Monitor - director-driven listener
 --------------------------------------------------------------------------------]]
--- MEGAMOD FIX: "TIME.WEEKLY" is not a valid slice id and complete() made the old
--- event one-shot. A Create-mode onDayBegin listener gives real 14-day recurrence.
+-- MEGAMOD DIRECTOR: cadence (daily 25% roll + own 14-day cooldown) now lives in
+-- EventDirector.lua (registry: SHAKEDOWNS, cooldownDays 14). This block answers
+-- director picks: pass when ineligible, launch when eligible.
 _id = "MEGAMOD_SHAKEDOWN_MONITOR"
 _event = "MegaModShakedownMonitor"
 _gameStage = "Bridging"
 _autoStartMode = "Create"
 _category = "Misc"
 
-persist{}
-lastShakedownTime = 0
+function GameEvent.onMegaModEventPick(e)
+    if not e or e.eventName ~= "SHAKEDOWNS" then return end
 
-function GameEvent.onDayBegin(e)
     local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction or not playerFaction.buildings then return end
-    if #playerFaction.buildings < 3 then return end
-
-    -- Cooldown: ~2 weeks
-    local cooldownSeconds = Utils:daysToSecs(14)
-    if lastShakedownTime > 0 and (worldTime - lastShakedownTime) < cooldownSeconds then
+    if not playerFaction or not playerFaction.buildings then
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "SHAKEDOWNS")
+        return
+    end
+    if #playerFaction.buildings < 3 then
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "SHAKEDOWNS")
         return
     end
 
-    -- 25% chance per day once off cooldown, so it doesn't fire like clockwork
-    if math.random() < 0.25 then
-        lastShakedownTime = worldTime
-        WorldUtils:scheduleWithDelay("MegaModShakedown", 5, "TICK")
-    end
+    WorldUtils:scheduleWithDelay("MegaModShakedown", 5, "TICK")
+    Utils:raiseGameEvent("onMegaModEventLaunched", "eventName", "SHAKEDOWNS")
 end
 
 --[[------------------------------------------------------------------------------

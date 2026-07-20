@@ -109,30 +109,49 @@ function onTrigger()
 end
 
 --[[------------------------------------------------------------------------------
-    MASSACRE MONITOR - Weekly listener
+    MASSACRE MONITOR - director-driven listener
+    MEGAMOD DIRECTOR: cadence (weekly 15% roll) now lives in EventDirector.lua
+    (registry: VALENTINES, onceOnly). This block answers director picks: pass
+    when ineligible, launch when eligible. massacreTriggered stays the source
+    of truth for "already fired"; the director's once-flag is a second layer.
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_VALENTINES_MONITOR"
 _event = "MegaModValentinesMonitor"
 _gameStage = "Bridging"
-_autoStartMode = "Create" -- MEGAMOD FIX: Schedule+complete() unregistered onWeekBegin before it ever ran
+_autoStartMode = "Create" -- MEGAMOD FIX: Schedule+complete() unregistered listeners before they ever ran
 _category = "Misc"
 
 persist{}
 massacreTriggered = false
 
-function GameEvent.onWeekBegin(e)
-    if massacreTriggered then return end
+function GameEvent.onMegaModEventPick(e)
+    if not e or e.eventName ~= "VALENTINES" then return end
+
+    -- (listener stays alive here so the director always gets a pass reply)
+    if massacreTriggered then
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "VALENTINES")
+        return
+    end
 
     local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction then return end
+    if not playerFaction then
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "VALENTINES")
+        return
+    end
 
     -- Require 8+ crew members
     local members = playerFaction.members
-    if not members or #members < 8 then return end
+    if not members or #members < 8 then
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "VALENTINES")
+        return
+    end
 
     -- Require at war with at least one faction (very negative rating)
     local knownGangs = playerFaction.diplomacy:getKnownGangs()
-    if not knownGangs then return end
+    if not knownGangs then
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "VALENTINES")
+        return
+    end
 
     local hasHostileRival = false
     for _, faction in next, knownGangs do
@@ -144,12 +163,13 @@ function GameEvent.onWeekBegin(e)
             end
         end
     end
-    if not hasHostileRival then return end
-
-    -- 15% chance per week
-    if math.random() < 0.15 then
-        massacreTriggered = true
-        WorldUtils:scheduleWithDelay("MegaModValentinesMassacre", 5, "TICK")
-        complete() -- one-time event fired; this monitor is done
+    if not hasHostileRival then
+        Utils:raiseGameEvent("onMegaModEventPass", "eventName", "VALENTINES")
+        return
     end
+
+    massacreTriggered = true
+    WorldUtils:scheduleWithDelay("MegaModValentinesMassacre", 5, "TICK")
+    Utils:raiseGameEvent("onMegaModEventLaunched", "eventName", "VALENTINES")
+    complete() -- one-time event fired; this monitor is done
 end
