@@ -3,6 +3,11 @@
     Multi-stage event chain. A gambler named "Silk" Sullivan offers to fix
     boxing matches at your casino. Invest, profit, then choose: go big or
     cash out.
+
+    Chain state lives in fact.MegaModBlackSoxStage (world facts are save-
+    persisted and visible to every _id block, unlike script vars):
+      nil/0 = not started, 1 = pitch pending, 2 = invested,
+      3 = first payout collected, 4 = chain over
 --------------------------------------------------------------------------------]]
 
 _namespace = "WORLD_EVENTS"
@@ -30,34 +35,28 @@ function investInFix()
         title("$MEGAMOD_BSOX_pitch_broke_title") --$ Short on Cash
         text("$MEGAMOD_BSOX_pitch_broke_text") --$ You reach for the bankroll but it's lighter than expected. Silk notices and tips his hat. "Maybe next time, boss." He's gone before you can respond.
         option("$MEGAMOD_BSOX_dismiss") --$ Next time.
-        blackSoxStage = 3 -- done, can't retry
-        complete()
+        fact.MegaModBlackSoxStage = 4 -- done, can't retry
         return
     end
 
     BRScript:PlayerSubtractCash(2000, "CASH.INVESTMENT")
-    blackSoxStage = 1
+    fact.MegaModBlackSoxStage = 2
 
     title("$MEGAMOD_BSOX_pitch_invested_title") --$ Money Down
     text("$MEGAMOD_BSOX_pitch_invested_text") --$ You peel off twenty crisp hundreds and slide them across the desk. Silk pockets the money with practiced ease. "You won't regret this, boss. First fight is next week. I'll be in touch." He tips his hat and vanishes like smoke.
     option("$MEGAMOD_BSOX_dismiss") --$ We'll see.
 
-    -- Schedule stage 2 in 7 days
-    worldTimeCallback(triggerFirstPayout, Utils:daysToSecs(7))
-    complete()
+    -- MEGAMOD FIX: schedule stage 2 directly; _delayedEvents survives save/load,
+    -- unlike worldTimeCallback which died when this event completed
+    WorldUtils:scheduleWithDelay("MegaModBlackSoxPayout", Utils:daysToSecs(7), "TICK")
 end
 
 function passOnFix()
-    blackSoxStage = 3
+    fact.MegaModBlackSoxStage = 4
 
     title("$MEGAMOD_BSOX_pitch_pass_title") --$ Shown the Door
     text("$MEGAMOD_BSOX_pitch_pass_text") --$ "Get out of my office." Silk holds up his hands, still grinning. "Your loss, boss. This kind of deal doesn't come around twice." He straightens his tie and walks out. You've got a feeling he'll find another sucker by sundown.
     option("$MEGAMOD_BSOX_dismiss") --$ Good riddance.
-    complete()
-end
-
-function triggerFirstPayout()
-    WorldUtils:scheduleWithDelay("MegaModBlackSoxPayout", 5, "TICK")
 end
 
 --[[------------------------------------------------------------------------------
@@ -71,7 +70,7 @@ function canTrigger() return true end
 
 function onTrigger()
     BRScript:PlayerAddCash(4000, "CASH.MISSION_REWARD")
-    blackSoxStage = 2
+    fact.MegaModBlackSoxStage = 3
 
     setModal(true)
     title("$MEGAMOD_BSOX_payout_title") --$ First Payout
@@ -79,12 +78,7 @@ function onTrigger()
     option("$MEGAMOD_BSOX_dismiss") --$ Not bad, Silk.
 
     -- Schedule stage 3 in 7 days
-    worldTimeCallback(triggerDoubleOrNothing, Utils:daysToSecs(7))
-    complete()
-end
-
-function triggerDoubleOrNothing()
-    WorldUtils:scheduleWithDelay("MegaModBlackSoxFinal", 5, "TICK")
+    WorldUtils:scheduleWithDelay("MegaModBlackSoxFinal", Utils:daysToSecs(7), "TICK")
 end
 
 --[[------------------------------------------------------------------------------
@@ -111,8 +105,7 @@ function goBig()
         title("$MEGAMOD_BSOX_final_broke_title") --$ Can't Cover It
         text("$MEGAMOD_BSOX_final_broke_text") --$ You don't have $5000 to put up. Silk shrugs. "No hard feelings, boss. Can't play if you can't pay." He tips his hat and disappears. The boxing fix is over.
         option("$MEGAMOD_BSOX_dismiss") --$ Damn.
-        blackSoxStage = 3
-        complete()
+        fact.MegaModBlackSoxStage = 4
         return
     end
 
@@ -121,24 +114,36 @@ function goBig()
     if math.random() < 0.60 then
         -- Success: big payout
         BRScript:PlayerAddCash(12000, "CASH.MISSION_REWARD")
-        blackSoxStage = 3
+        fact.MegaModBlackSoxStage = 4
 
         title("$MEGAMOD_BSOX_final_win_title") --$ The Big Score
         text("$MEGAMOD_BSOX_final_win_text") --$ The champ hits the canvas in the eighth round and the crowd goes wild. Your casino rakes in a fortune from the betting tables. Silk delivers $12,000 to your office in a leather suitcase. "Pleasure doing business, boss." He tips his hat one last time and walks out of your life. Not bad for a few weeks' work.
         option("$MEGAMOD_BSOX_dismiss") --$ Pleasure was mine.
     else
         -- Failure: lose the investment + police heat
-        blackSoxStage = 3
+        fact.MegaModBlackSoxStage = 4
 
         if playerFaction and playerFaction.buildings and #playerFaction.buildings > 0 then
-            local building = playerFaction.buildings[1]
-            if building and building.precinct then
+            -- MEGAMOD FIX: heat lands on the casino that hosted the fights, and is
+            -- REAL precinct police activity (the game event below is only the UI toast)
+            local heatPrecinct = nil
+            for _, building in next, playerFaction.buildings do
+                if building and building.buildingType and tostring(building.buildingType):lower():find("casino") then
+                    heatPrecinct = building:getPrecinct()
+                    break
+                end
+            end
+            if not heatPrecinct and playerFaction.buildings[1] then
+                heatPrecinct = playerFaction.buildings[1]:getPrecinct()
+            end
+            if heatPrecinct then
+                heatPrecinct:addTemporaryPoliceActivity(25)
                 Utils:raiseGameEvent("onPoliceActivityEffectApplied",
                     "alertKey", "MEGAMOD_BSOX_HEAT",
                     "appliedPoliceActivity", 25,
-                    "originalValue", 0,
+                    "originalValue", heatPrecinct:getPoliceActivity() or 0,
                     "effectId", "MEGAMOD_BLACKSOX_HEAT",
-                    "precinct", building.precinct,
+                    "precinct", heatPrecinct,
                     "description", {"$Text", "Boxing Fix Scandal"})
             end
         end
@@ -147,32 +152,32 @@ function goBig()
         text("$MEGAMOD_BSOX_final_lose_text") --$ The champ didn't go down. Turns out he took your money AND the other side's money, and decided to fight for real. The crowd smells a rat, someone talks to a reporter, and by morning the papers are running stories about fixed fights at your casino. Your $5000 is gone, Silk has vanished, and the cops are very interested in your gambling operation.
         option("$MEGAMOD_BSOX_dismiss") --$ Should've quit while I was ahead.
     end
-    complete()
 end
 
 function cashOut()
-    blackSoxStage = 3
+    fact.MegaModBlackSoxStage = 4
 
     title("$MEGAMOD_BSOX_final_cashout_title") --$ Smart Money
     text("$MEGAMOD_BSOX_final_cashout_text") --$ "You're up two grand and you want to walk away?" Silk looks genuinely hurt. "Fine. Your call, boss. But you're leaving a fortune on the table." He adjusts his hat and heads for the door. You pocket your profits and sleep well knowing the smart money always knows when to fold.
     option("$MEGAMOD_BSOX_dismiss") --$ Smart move.
-    complete()
 end
 
 function turnHimIn()
-    blackSoxStage = 3
+    fact.MegaModBlackSoxStage = 4
 
     -- Reduce police heat
     local playerFaction = WorldUtils:getPlayerFaction()
     if playerFaction and playerFaction.buildings and #playerFaction.buildings > 0 then
         local building = playerFaction.buildings[1]
-        if building and building.precinct then
+        local precinct = building and building:getPrecinct() -- MEGAMOD FIX: building.precinct doesn't exist
+        if precinct then
+            precinct:addTemporaryPoliceActivity(-15) -- real heat reduction; decays back to normal over time
             Utils:raiseGameEvent("onPoliceActivityEffectApplied",
                 "alertKey", "MEGAMOD_BSOX_GOODWILL",
                 "appliedPoliceActivity", -15,
-                "originalValue", 0,
+                "originalValue", precinct:getPoliceActivity() or 0,
                 "effectId", "MEGAMOD_BLACKSOX_TURNIN",
-                "precinct", building.precinct,
+                "precinct", precinct,
                 "description", {"$Text", "Turned in boxing fixer"})
         end
     end
@@ -180,33 +185,26 @@ function turnHimIn()
     title("$MEGAMOD_BSOX_final_turnin_title") --$ Civic Duty
     text("$MEGAMOD_BSOX_final_turnin_text") --$ You make an anonymous call to the precinct. An hour later, Silk Sullivan is in handcuffs, looking bewildered. "I thought we were partners!" he shouts as the cops drag him out. The police are grateful for the tip, and the heat on your operations cools down a few degrees. Sometimes the best play is giving the law a bigger fish.
     option("$MEGAMOD_BSOX_dismiss") --$ Better him than me.
-    complete()
 end
 
 --[[------------------------------------------------------------------------------
     BLACK SOX MONITOR - Weekly listener
+    MEGAMOD FIX: "Schedule" events are created inactive so GameEvent listeners
+    never fired; converted to the Create-listener pattern (see HardModeBankroll).
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_BLACKSOX_MONITOR"
 _event = "MegaModBlackSoxMonitor"
 _gameStage = "Bridging"
-_autoStartMode = "Schedule"
-_triggerDelay = 250
+_autoStartMode = "Create"
 _category = "Misc"
 
-persist{}
-blackSoxStage = 0
-
-function canTrigger()
-    return true
-end
-
-function onTrigger()
-    complete()
-end
-
 function GameEvent.onWeekBegin(e)
-    -- Only trigger the initial pitch; subsequent stages use worldTimeCallback
-    if blackSoxStage ~= 0 then return end
+    -- Only trigger the initial pitch; later stages chain via scheduleWithDelay
+    if (fact.MegaModBlackSoxStage or 0) ~= 0 then
+        complete()
+        return
+    end
+    if worldTime < 250 then return end -- MEGAMOD FIX: preserves the old _triggerDelay = 250
 
     local playerFaction = WorldUtils:getPlayerFaction()
     if not playerFaction then return end
@@ -232,6 +230,8 @@ function GameEvent.onWeekBegin(e)
 
     -- 20% chance per week once requirements are met
     if math.random() < 0.20 then
+        fact.MegaModBlackSoxStage = 1 -- gate immediately so we can't double-pitch
         WorldUtils:scheduleWithDelay("MegaModBlackSoxPitch", 5, "TICK")
+        complete() -- chain is self-driving from here; listener no longer needed
     end
 end

@@ -12,26 +12,14 @@ _namespace = "WORLD_EVENTS"
 _id = "MEGAMOD_HIJACK_MONITOR"
 _event = "MegaModHijackMonitor"
 _gameStage = "Bridging"
-_autoStartMode = "Schedule"
-_triggerDelay = 200
+_autoStartMode = "Create" -- MEGAMOD FIX: Schedule-mode events are created inactive so GameEvent listeners never register; Create keeps the monitor alive (see HardModeBankroll.lua)
 _category = "Misc"
 
 persist{}
 lastHijackTime = 0
 
-persist{}
-hijackRivalIid = nil
-
 local hijackCooldownDays = 21
 local hijackChance = 0.20
-
-function canTrigger()
-    return true
-end
-
-function onTrigger()
-    complete()
-end
 
 function GameEvent.onWeekBegin(e)
     -- Cooldown check
@@ -60,10 +48,11 @@ function GameEvent.onWeekBegin(e)
 
     -- Pick a random rival for flavor text
     local rival = activeRivals[math.random(1, #activeRivals)]
-    hijackRivalIid = rival.iid
     lastHijackTime = worldTime
 
-    WorldUtils:scheduleWithDelay("MegaModHijackEvent", 5, "TICK")
+    -- MEGAMOD FIX: persist{} vars are not shared across _id blocks; pass the rival through
+    -- the event payload instead (factions are identified by factionId, they have no .iid)
+    WorldUtils:scheduleWithDelay("MegaModHijackEvent", 5, "TICK", "hijackRivalFactionId", rival.factionId)
 end
 
 --[[------------------------------------------------------------------------------
@@ -72,6 +61,9 @@ end
 _id = "MEGAMOD_HIJACK_EVENT"
 _event = "MegaModHijackEvent"
 _category = "Misc"
+
+persist{}
+hijackRivalFactionId = nil
 
 function canTrigger()
     return true
@@ -86,13 +78,17 @@ function onTrigger()
     option("$MEGAMOD_HIJACK_pass", passOnIt) --$ Pass
 end
 
+-- MEGAMOD FIX: pages set inside option callbacks never display (the event window doesn't
+-- re-render and the event auto-completes on option click), so results are shown as a
+-- separate event like vanilla racket events do
+function showHijackResult(titleKey, textKey)
+    WorldUtils:scheduleWithDelay("MegaModHijackResult", 5, "TICK", "resultTitle", titleKey, "resultText", textKey)
+end
+
 function smallAmbush()
     local playerFaction = WorldUtils:getPlayerFaction()
     if not playerFaction or playerFaction.cash.count < 300 then
-        title("$MEGAMOD_HIJACK_broke_title") --$ Can't Afford It
-        text("$MEGAMOD_HIJACK_broke_text") --$ You can't scrape together enough cash to outfit even a small crew for the hit. The convoy rolls right past while you watch from the curb.
-        option("$MEGAMOD_HIJACK_dismiss") --$ Next time.
-        complete()
+        showHijackResult("$MEGAMOD_HIJACK_broke_title", "$MEGAMOD_HIJACK_broke_text") --$ Can't Afford It / You can't scrape together enough cash to outfit even a small crew for the hit. The convoy rolls right past while you watch from the curb.
         return
     end
 
@@ -103,26 +99,18 @@ function smallAmbush()
         -- Gain some alcohol
         local amount = math.random(15, 25)
         local quality = math.random(1, 3)
-        getWorldLibs().addAlcoholToFaction(playerFaction, amount, quality)
-        title("$MEGAMOD_HIJACK_small_win_title") --$ Quick and Clean
-        text("$MEGAMOD_HIJACK_small_win_text") --$ Your boys hit the tail truck and vanished before the lead driver even knew what happened. A few crates of hooch are now sitting in your warehouse. Not a bad morning's work.
-        option("$MEGAMOD_HIJACK_dismiss") --$ That'll do.
+        WorldUtils:addAlcoholToFaction(playerFaction, amount, quality) -- MEGAMOD FIX: getWorldLibs() is unreachable from the script sandbox
+        showHijackResult("$MEGAMOD_HIJACK_small_win_title", "$MEGAMOD_HIJACK_small_win_text") --$ Quick and Clean / Your boys hit the tail truck and vanished before the lead driver even knew what happened. A few crates of hooch are now sitting in your warehouse. Not a bad morning's work.
     else
         -- Fail: lose the $300, nothing gained
-        title("$MEGAMOD_HIJACK_small_lose_title") --$ Botched Job
-        text("$MEGAMOD_HIJACK_small_lose_text") --$ The ambush went sideways. Your boys jumped too early, the drivers floored it, and the whole convoy got away. You're out $300 and have nothing to show for it but tire tracks and embarrassment.
-        option("$MEGAMOD_HIJACK_dismiss") --$ Waste of money.
+        showHijackResult("$MEGAMOD_HIJACK_small_lose_title", "$MEGAMOD_HIJACK_small_lose_text") --$ Botched Job / The ambush went sideways. Your boys jumped too early, the drivers floored it, and the whole convoy got away. You're out $300 and have nothing to show for it but tire tracks and embarrassment.
     end
-    complete()
 end
 
 function bigAmbush()
     local playerFaction = WorldUtils:getPlayerFaction()
     if not playerFaction or playerFaction.cash.count < 600 then
-        title("$MEGAMOD_HIJACK_broke_title") --$ Can't Afford It
-        text("$MEGAMOD_HIJACK_broke_text") --$ You can't scrape together enough cash to outfit even a small crew for the hit. The convoy rolls right past while you watch from the curb.
-        option("$MEGAMOD_HIJACK_dismiss") --$ Next time.
-        complete()
+        showHijackResult("$MEGAMOD_HIJACK_broke_title", "$MEGAMOD_HIJACK_broke_text") --$ Can't Afford It
         return
     end
 
@@ -133,40 +121,44 @@ function bigAmbush()
         -- Gain more alcohol
         local amount = math.random(30, 50)
         local quality = math.random(2, 4)
-        getWorldLibs().addAlcoholToFaction(playerFaction, amount, quality)
-        title("$MEGAMOD_HIJACK_big_win_title") --$ Cleaned Them Out
-        text("$MEGAMOD_HIJACK_big_win_text") --$ Your crew boxed in the entire convoy. Both trucks, every barrel, every crate. The drivers were smart enough not to argue with the hardware your boys were carrying. You've got enough hooch to keep your joints running for weeks.
-        option("$MEGAMOD_HIJACK_dismiss") --$ Beautiful.
+        WorldUtils:addAlcoholToFaction(playerFaction, amount, quality) -- MEGAMOD FIX: getWorldLibs() is unreachable from the script sandbox
+        showHijackResult("$MEGAMOD_HIJACK_big_win_title", "$MEGAMOD_HIJACK_big_win_text") --$ Cleaned Them Out / Your crew boxed in the entire convoy. Both trucks, every barrel, every crate. The drivers were smart enough not to argue with the hardware your boys were carrying. You've got enough hooch to keep your joints running for weeks.
     else
         -- Fail: lose $600 and rival relation worsens
-        local rival = getHijackRivalByIid(hijackRivalIid)
-        if rival then
-            rival.rating:applyEffect(playerFaction, "MOLE_DISCOVERED")
+        -- MEGAMOD FIX: MOLE_DISCOVERED is a morale config, not a rating effect; AMBUSHED is the
+        -- verified RatingEffects id for getting hit by a player ambush
+        local rival = WorldUtils:getFactionByFactionId(hijackRivalFactionId)
+        if rival and rival._active then
+            rival.rating:applyEffect(playerFaction, "AMBUSHED")
         end
-        title("$MEGAMOD_HIJACK_big_lose_title") --$ Ambush Went Wrong
-        text("$MEGAMOD_HIJACK_big_lose_text") --$ They were ready for you. The convoy was bait, and your crew walked right into a counter-ambush. You're out $600, a couple of your boys got roughed up, and the rival gang knows you tried to hit them. This will have consequences.
-        option("$MEGAMOD_HIJACK_dismiss") --$ That was ugly.
+        showHijackResult("$MEGAMOD_HIJACK_big_lose_title", "$MEGAMOD_HIJACK_big_lose_text") --$ Ambush Went Wrong / They were ready for you. The convoy was bait, and your crew walked right into a counter-ambush. You're out $600, a couple of your boys got roughed up, and the rival gang knows you tried to hit them. This will have consequences.
     end
-    complete()
 end
 
 function passOnIt()
-    title("$MEGAMOD_HIJACK_pass_title") --$ Convoy Passes
-    text("$MEGAMOD_HIJACK_pass_text") --$ You watch the trucks roll by and let them go. Not every opportunity is worth the risk. There'll be another shipment, and maybe next time the odds will be better.
-    option("$MEGAMOD_HIJACK_dismiss") --$ Patience.
-    complete()
+    showHijackResult("$MEGAMOD_HIJACK_pass_title", "$MEGAMOD_HIJACK_pass_text") --$ Convoy Passes / You watch the trucks roll by and let them go. Not every opportunity is worth the risk. There'll be another shipment, and maybe next time the odds will be better.
 end
 
-function getHijackRivalByIid(iid)
-    if not iid then return nil end
-    local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction then return nil end
-    local knownGangs = playerFaction.diplomacy:getKnownGangs()
-    if not knownGangs then return nil end
-    for i = 1, #knownGangs do
-        if knownGangs[i].iid == iid then
-            return knownGangs[i]
-        end
-    end
-    return nil
+--[[------------------------------------------------------------------------------
+    Hijacking Result Dialog
+--------------------------------------------------------------------------------]]
+_id = "MEGAMOD_HIJACK_RESULT"
+_event = "MegaModHijackResult"
+_category = "Misc"
+
+persist{}
+resultTitle = nil
+
+persist{}
+resultText = nil
+
+function canTrigger()
+    return true
+end
+
+function onTrigger()
+    setModal(true)
+    title(resultTitle)
+    text(resultText)
+    option("$MEGAMOD_HIJACK_dismiss")
 end

@@ -2,46 +2,14 @@
     MegaMod: Alderman System
     Purchase corrupt aldermen to reduce police activity in precincts.
     Aldermen require monthly upkeep and can be poached by rivals.
+
+    All roster state lives in the persistent monitor block below (script vars
+    are NOT shared across _id blocks). Dialog events receive their precinct id
+    via scheduleWithDelay params and report outcomes back to the monitor
+    through custom game events.
 --------------------------------------------------------------------------------]]
 
 _namespace = "WORLD_EVENTS"
-
---[[------------------------------------------------------------------------------
-    Alderman Monitor - Background listener
---------------------------------------------------------------------------------]]
-_id = "MEGAMOD_ALDERMAN_MONITOR"
-_event = "MegaModAldermanMonitor"
-_gameStage = "Bridging"
-_autoStartMode = "Schedule"
-_triggerDelay = 250
-_category = "Misc"
-
-persist{}
-aldermanPrecincts = {}
-
-persist{}
-aldermanCount = 0
-
-persist{}
-lastOfferTime = 0
-
-persist{}
-lastUpkeepTime = 0
-
-persist{}
-lastBuyoutCheckTime = 0
-
-persist{}
-pendingOfferPrecinctId = nil
-
-persist{}
-pendingOfferPrecinctName = nil
-
-persist{}
-pendingBuyoutPrecinctId = nil
-
-persist{}
-pendingBuyoutPrecinctName = nil
 
 local ALDERMAN_COST = 1000
 local ALDERMAN_UPKEEP = 200
@@ -55,14 +23,33 @@ local BUYOUT_MATCH_COST = 500
 local POLICE_REDUCTION = -15
 local MIN_BUILDINGS_IN_PRECINCT = 3
 
-function canTrigger()
-    return true
-end
+--[[------------------------------------------------------------------------------
+    Alderman Monitor - Background listener (owns all alderman state)
+    MEGAMOD FIX: "Schedule" events are created inactive so GameEvent listeners
+    never fired; converted to the Create-listener pattern (see HardModeBankroll).
+--------------------------------------------------------------------------------]]
+_id = "MEGAMOD_ALDERMAN_MONITOR"
+_event = "MegaModAldermanMonitor"
+_gameStage = "Bridging"
+_autoStartMode = "Create"
+_category = "Misc"
 
-function onTrigger()
-    complete()
-end
+persist{}
+aldermanPrecincts = {} -- precinctId -> true
 
+persist{}
+aldermanCount = 0
+
+persist{}
+lastOfferTime = 0
+
+persist{}
+lastUpkeepTime = 0
+
+persist{}
+lastBuyoutCheckTime = 0
+
+-- Safe as a local helper: touches no sandbox globals (WorldUtils etc. would be nil here)
 local function countBuildingsInPrecinct(buildings, precinctId)
     local count = 0
     for i = 1, #buildings do
@@ -77,33 +64,21 @@ local function countBuildingsInPrecinct(buildings, precinctId)
     return count
 end
 
-local function applyAldermanBenefit(precinctId)
+function GameEvent.onWeekBegin(e)
+    if worldTime < 250 then return end -- MEGAMOD FIX: preserves the old _triggerDelay = 250
+
     local playerFaction = WorldUtils:getPlayerFaction()
     if not playerFaction or not playerFaction.buildings then return end
 
-    -- Find a building in this precinct to get the precinct object
-    for i = 1, #playerFaction.buildings do
-        local building = playerFaction.buildings[i]
-        if building then
-            local precinct = building:getPrecinct()
-            if precinct and precinct.id == precinctId then
-                local curPoliceActivity = precinct:getPoliceActivity() or 0
-                Utils:raiseGameEvent("onPoliceActivityEffectApplied",
-                    "alertKey", "MEGAMOD_ALDERMAN_" .. tostring(precinctId),
-                    "appliedPoliceActivity", POLICE_REDUCTION,
-                    "originalValue", curPoliceActivity,
-                    "effectId", "MEGAMOD_ALDERMAN_PROTECTION",
-                    "precinct", precinct,
-                    "description", {"$Text", "Alderman Protection"})
-                return
-            end
+    -- Weekly check 0: keep protection topped up while an alderman is held
+    -- MEGAMOD FIX: temporary police activity decays, so the benefit must be
+    -- re-applied weekly; it stops automatically once the precinct leaves the roster
+    for precinctId in next, aldermanPrecincts do
+        local precinct = WorldUtils:getPrecinct(precinctId)
+        if precinct then
+            precinct:addTemporaryPoliceActivity(POLICE_REDUCTION)
         end
     end
-end
-
-function GameEvent.onWeekBegin(e)
-    local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction or not playerFaction.buildings then return end
 
     -- Weekly check 1: Monthly upkeep
     if lastUpkeepTime == 0 then
@@ -140,18 +115,12 @@ function processUpkeep(playerFaction)
     if playerFaction.cash.count >= totalUpkeep then
         BRScript:PlayerSubtractCash(totalUpkeep, "CASH.ALDERMAN_UPKEEP")
     else
-        -- Can't afford, lose an alderman
-        local lostPrecinctId = nil
-        local lostPrecinctName = nil
-        for precinctId, name in next, aldermanPrecincts do
-            lostPrecinctId = precinctId
-            lostPrecinctName = name
-            break
-        end
+        -- Can't afford, lose an alderman (removal from the roster also stops
+        -- the weekly police reduction)
+        local lostPrecinctId = next(aldermanPrecincts)
         if lostPrecinctId then
             aldermanPrecincts[lostPrecinctId] = nil
             aldermanCount = aldermanCount - 1
-            pendingOfferPrecinctName = lostPrecinctName
             WorldUtils:scheduleWithDelay("MegaModAldermanLost", 5, "TICK")
         end
     end
@@ -159,11 +128,10 @@ end
 
 function checkBuyoutAttempt()
     -- For each alderman, BUYOUT_CHANCE to trigger
-    for precinctId, name in next, aldermanPrecincts do
+    for precinctId in next, aldermanPrecincts do
         if math.random() < BUYOUT_CHANCE then
-            pendingBuyoutPrecinctId = precinctId
-            pendingBuyoutPrecinctName = name
-            WorldUtils:scheduleWithDelay("MegaModAldermanBuyout", 5, "TICK")
+            -- MEGAMOD FIX: precinct identity rides on the event itself (persisted param)
+            WorldUtils:scheduleWithDelay("MegaModAldermanBuyout", 5, "TICK", "buyoutPrecinctId", precinctId)
             return -- One buyout attempt per check
         end
     end
@@ -197,11 +165,25 @@ function checkNewOffer(playerFaction)
     if math.random() >= OFFER_CHANCE then return end
 
     local precinct = candidates[math.random(1, #candidates)]
-    pendingOfferPrecinctId = precinct.id
-    pendingOfferPrecinctName = precinct.name or "this precinct"
     lastOfferTime = worldTime
 
-    WorldUtils:scheduleWithDelay("MegaModAldermanOffer", 5, "TICK")
+    WorldUtils:scheduleWithDelay("MegaModAldermanOffer", 5, "TICK", "offerPrecinctId", precinct.id)
+end
+
+-- MEGAMOD FIX: dialog outcomes flow back to the monitor through custom game
+-- events (the dialogs run in their own script instances and can't touch our vars)
+function GameEvent.onMegaModAldermanBought(e)
+    if not aldermanPrecincts[e.precinctId] then
+        aldermanPrecincts[e.precinctId] = true
+        aldermanCount = aldermanCount + 1
+    end
+end
+
+function GameEvent.onMegaModAldermanRemoved(e)
+    if aldermanPrecincts[e.precinctId] then
+        aldermanPrecincts[e.precinctId] = nil
+        aldermanCount = aldermanCount - 1
+    end
 end
 
 --[[------------------------------------------------------------------------------
@@ -211,8 +193,11 @@ _id = "MEGAMOD_ALDERMAN_OFFER"
 _event = "MegaModAldermanOffer"
 _category = "Misc"
 
+persist{}
+offerPrecinctId = nil -- Expected Param
+
 function canTrigger()
-    return pendingOfferPrecinctId ~= nil
+    return offerPrecinctId ~= nil
 end
 
 function onTrigger()
@@ -229,32 +214,34 @@ function buyAlderman()
         title("$MEGAMOD_ALDER_broke_title") --$ Can't Afford It
         text("$MEGAMOD_ALDER_broke_text") --$ You don't have $1000 to grease the alderman's palm. He shrugs and says he'll find someone else who appreciates the value of political friendship.
         option("$MEGAMOD_ALDER_dismiss") --$ Noted.
-        complete()
         return
     end
 
     BRScript:PlayerSubtractCash(ALDERMAN_COST, "CASH.ALDERMAN_PURCHASE")
-    aldermanPrecincts[pendingOfferPrecinctId] = pendingOfferPrecinctName
-    aldermanCount = aldermanCount + 1
+    Utils:raiseGameEvent("onMegaModAldermanBought", "precinctId", offerPrecinctId)
 
-    -- Apply police reduction
-    applyAldermanBenefit(pendingOfferPrecinctId)
+    -- Apply the police reduction immediately (the monitor keeps it topped up weekly)
+    local precinct = WorldUtils:getPrecinct(offerPrecinctId)
+    if precinct then
+        precinct:addTemporaryPoliceActivity(POLICE_REDUCTION) -- MEGAMOD FIX: real effect; the game event below is only the UI toast
+        Utils:raiseGameEvent("onPoliceActivityEffectApplied",
+            "alertKey", "MEGAMOD_ALDERMAN_" .. tostring(offerPrecinctId),
+            "appliedPoliceActivity", POLICE_REDUCTION,
+            "originalValue", precinct:getPoliceActivity() or 0,
+            "effectId", "MEGAMOD_ALDERMAN_PROTECTION",
+            "precinct", precinct,
+            "description", {"$Text", "Alderman Protection"})
+    end
 
     title("$MEGAMOD_ALDER_bought_title") --$ Alderman Acquired
     text("$MEGAMOD_ALDER_bought_text") --$ The alderman pockets the cash with a practiced smile. "Pleasure doing business. I'll make some calls, and you'll notice the patrols thinning out real quick." Police activity in the precinct drops immediately. Just remember, he expects $200 a month to keep things that way.
     option("$MEGAMOD_ALDER_dismiss") --$ Worth every penny.
-    pendingOfferPrecinctId = nil
-    pendingOfferPrecinctName = nil
-    complete()
 end
 
 function passOnOffer()
     title("$MEGAMOD_ALDER_pass_title") --$ Opportunity Declined
     text("$MEGAMOD_ALDER_pass_text") --$ The alderman nods and slips back into the crowd. He'll find another buyer, and next time he might not come to you first. In Chicago, political friends are hard to come by and easy to lose.
     option("$MEGAMOD_ALDER_dismiss") --$ We'll manage.
-    pendingOfferPrecinctId = nil
-    pendingOfferPrecinctName = nil
-    complete()
 end
 
 --[[------------------------------------------------------------------------------
@@ -270,8 +257,6 @@ function onTrigger()
     title("$MEGAMOD_ALDER_lost_title") --$ Alderman Walks
     text("$MEGAMOD_ALDER_lost_text") --$ Your alderman contact hasn't received his monthly payment and he's not happy about it. "No money, no favors," he says on his way out the door. Without his protection, the police will be back to their old habits in the precinct. You'll need to find and pay a new contact if you want the coverage back.
     option("$MEGAMOD_ALDER_dismiss") --$ Should've paid up.
-    pendingOfferPrecinctName = nil
-    complete()
 end
 
 --[[------------------------------------------------------------------------------
@@ -281,8 +266,11 @@ _id = "MEGAMOD_ALDERMAN_BUYOUT"
 _event = "MegaModAldermanBuyout"
 _category = "Misc"
 
+persist{}
+buyoutPrecinctId = nil -- Expected Param
+
 function canTrigger()
-    return pendingBuyoutPrecinctId ~= nil
+    return buyoutPrecinctId ~= nil
 end
 
 function onTrigger()
@@ -299,13 +287,7 @@ function matchBuyout()
         title("$MEGAMOD_ALDER_buyout_broke_title") --$ Can't Match It
         text("$MEGAMOD_ALDER_buyout_broke_text") --$ You don't have the $500 to keep the alderman loyal. He tips his hat and walks to the other side. Your police protection in the precinct is gone.
         option("$MEGAMOD_ALDER_dismiss") --$ Damn.
-        if pendingBuyoutPrecinctId then
-            aldermanPrecincts[pendingBuyoutPrecinctId] = nil
-            aldermanCount = aldermanCount - 1
-        end
-        pendingBuyoutPrecinctId = nil
-        pendingBuyoutPrecinctName = nil
-        complete()
+        Utils:raiseGameEvent("onMegaModAldermanRemoved", "precinctId", buyoutPrecinctId)
         return
     end
 
@@ -313,20 +295,11 @@ function matchBuyout()
     title("$MEGAMOD_ALDER_buyout_kept_title") --$ Alderman Retained
     text("$MEGAMOD_ALDER_buyout_kept_text") --$ You slide the alderman an extra $500 and remind him who butters his bread. He pockets the cash and makes a phone call. "Tell them I'm not available." Your precinct protection stays intact, but these little loyalty tests are getting expensive.
     option("$MEGAMOD_ALDER_dismiss") --$ Stay bought, pal.
-    pendingBuyoutPrecinctId = nil
-    pendingBuyoutPrecinctName = nil
-    complete()
 end
 
 function loseBuyout()
-    if pendingBuyoutPrecinctId then
-        aldermanPrecincts[pendingBuyoutPrecinctId] = nil
-        aldermanCount = aldermanCount - 1
-    end
+    Utils:raiseGameEvent("onMegaModAldermanRemoved", "precinctId", buyoutPrecinctId)
     title("$MEGAMOD_ALDER_buyout_gone_title") --$ Alderman Poached
     text("$MEGAMOD_ALDER_buyout_gone_text") --$ Your alderman switches sides without so much as a goodbye. Politicians -- loyal as a weathervane. The police will be back to full patrols in the precinct before the week is out.
     option("$MEGAMOD_ALDER_dismiss") --$ We'll deal with it.
-    pendingBuyoutPrecinctId = nil
-    pendingBuyoutPrecinctName = nil
-    complete()
 end

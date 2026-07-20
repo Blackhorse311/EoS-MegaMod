@@ -9,31 +9,22 @@ _namespace = "WORLD_EVENTS"
 _id = "MEGAMOD_SAL_BONUS_LISTENER"
 _event = "MegaModSalBonusListener"
 _gameStage = "Bridging"
-_autoStartMode = "Schedule"
-_triggerDelay = 100
+_autoStartMode = "Create" -- MEGAMOD FIX: Schedule+complete() released this event before onBossDeath could ever fire
 _category = "Misc"
 
-persist{}
-bossesKilled = 0
-
-function canTrigger()
-    return true
-end
-
-function onTrigger()
-    complete()
-end
-
 function GameEvent.onBossDeath(e)
-    local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction then return end
-
     -- Only trigger if the dead boss was from a rival faction, not the player's
-    if e.target and e.target.faction and not e.target.faction.isPlayerFaction then
-        bossesKilled = bossesKilled + 1
-        -- Short delay to let Sal's vanilla dialog close first
-        WorldUtils:scheduleWithDelay("MegaModSalBonusDialog", 10, "TICK")
-    end
+    if not e.target or e.target.isPlayer then return end
+    if e.target.faction and e.target.faction.isPlayerFaction then return end
+
+    -- MEGAMOD FIX: only pay out when the PLAYER's faction made the kill.
+    -- The Dead state stores killerFaction (vanilla Health.lua DEAD onAdd).
+    local deathInformation = e.target:getState("Dead")
+    local killerFaction = deathInformation and deathInformation.killerFaction
+    if not killerFaction or not killerFaction.isPlayerFaction then return end
+
+    -- Short delay to let Sal's vanilla dialog close first
+    WorldUtils:scheduleWithDelay("MegaModSalBonusDialog", 10, "TICK")
 end
 
 --[[------------------------------------------------------------------------------
@@ -51,6 +42,6 @@ function onTrigger()
 end
 
 function collectBonus()
-    BRScript:PlayerAddCash(35000, "CASH.SAL_BONUS")
-    complete()
+    -- MEGAMOD FIX: CASH.SAL_BONUS is not a defined CASH config id; auto-complete closes the event after the option
+    BRScript:PlayerAddCash(35000, "CASH.MISSION_REWARD")
 end

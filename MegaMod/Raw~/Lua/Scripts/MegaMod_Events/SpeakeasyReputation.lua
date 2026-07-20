@@ -12,8 +12,7 @@ _namespace = "WORLD_EVENTS"
 _id = "MEGAMOD_SPEAKEASY_REP_MONITOR"
 _event = "MegaModSpeakeasyRepMonitor"
 _gameStage = "Bridging"
-_autoStartMode = "Schedule"
-_triggerDelay = 200
+_autoStartMode = "Create"
 _category = "Misc"
 
 persist{}
@@ -22,38 +21,24 @@ barWeeks = {}
 persist{}
 barMilestones = {}
 
-persist{}
-pendingMilestone = nil
-
-persist{}
-pendingBarName = nil
-
-persist{}
-pendingBarIid = nil
-
 local MILESTONE_WORD_OF_MOUTH = 4
 local MILESTONE_HOT_SPOT = 8
 local MILESTONE_UNWANTED_ATTENTION = 12
 local MILESTONE_LEGENDARY = 16
 
-function canTrigger()
-    return true
-end
-
-function onTrigger()
-    complete()
-end
-
-local function isBar(building)
+-- MEGAMOD FIX: global helpers (local functions don't get the sandbox env)
+function isBar(building)
     if not building or not building.buildingData then return false end
     local id = building.buildingData.id
     return id == "BUILDING_DATA.BAR"
 end
 
-local function getMilestoneKey(iid, weeks)
+function getMilestoneKey(iid, weeks)
     return tostring(iid) .. "_" .. tostring(weeks)
 end
 
+-- MEGAMOD FIX: Create-mode listener (Schedule-mode created inactive + complete() in
+-- onTrigger meant the weekly handler never stayed registered)
 function GameEvent.onWeekBegin(e)
     local playerFaction = WorldUtils:getPlayerFaction()
     if not playerFaction or not playerFaction.buildings then return end
@@ -85,10 +70,9 @@ function GameEvent.onWeekBegin(e)
                 local key = getMilestoneKey(iid, threshold)
                 if not barMilestones[key] then
                     barMilestones[key] = true
-                    pendingMilestone = threshold
-                    pendingBarName = building.name or "your speakeasy"
-                    pendingBarIid = iid
-                    WorldUtils:scheduleWithDelay("MegaModSpeakeasyMilestone", 5, "TICK")
+                    -- MEGAMOD FIX: state doesn't cross _id blocks; pass it on the
+                    -- scheduled event as varargs (save-persisted with the event)
+                    WorldUtils:scheduleWithDelay("MegaModSpeakeasyMilestone", 5, "TICK", "milestone", threshold, "barIid", iid)
                     return -- One milestone per week
                 end
             end
@@ -103,67 +87,60 @@ _id = "MEGAMOD_SPEAKEASY_MILESTONE"
 _event = "MegaModSpeakeasyMilestone"
 _category = "Misc"
 
+persist{}
+milestone = nil
+
+persist{}
+barIid = nil
+
 function canTrigger()
-    return pendingMilestone ~= nil
+    return milestone ~= nil
 end
 
 function onTrigger()
     setModal(true)
 
-    if pendingMilestone == MILESTONE_WORD_OF_MOUTH then
+    if milestone == MILESTONE_WORD_OF_MOUTH then
         title("$MEGAMOD_SPEKREP_wom_title") --$ Word of Mouth
         text("$MEGAMOD_SPEKREP_wom_text") --$ Your speakeasy is getting a reputation around the neighborhood. The regulars are telling their friends, and new faces are showing up every night. Keep the drinks flowing and the music playing, and this place could really be something.
         option("$MEGAMOD_SPEKREP_dismiss") --$ Good to hear.
-        complete()
 
-    elseif pendingMilestone == MILESTONE_HOT_SPOT then
+    elseif milestone == MILESTONE_HOT_SPOT then
         title("$MEGAMOD_SPEKREP_hot_title") --$ The Hot Spot
         text("$MEGAMOD_SPEKREP_hot_text") --$ Everybody wants in. Your speakeasy has become the place to be, and the money is rolling in. Jazz bands are lining up to play, flappers are dancing on the tables, and the bootleg is flowing like the Chicago River. Here's $500 from the extra business.
         BRScript:PlayerAddCash(500, "CASH.SPEAKEASY_REPUTATION")
         option("$MEGAMOD_SPEKREP_dismiss_cash") --$ Pour another round.
-        complete()
 
-    elseif pendingMilestone == MILESTONE_UNWANTED_ATTENTION then
+    elseif milestone == MILESTONE_UNWANTED_ATTENTION then
         title("$MEGAMOD_SPEKREP_heat_title") --$ Unwanted Attention
         text("$MEGAMOD_SPEKREP_heat_text") --$ The cops have noticed your booming speakeasy. A joint this popular can't stay under the radar forever. The local precinct is increasing patrols in the area, and the beat cops are asking questions. The price of success.
         applyPoliceHeat()
         option("$MEGAMOD_SPEKREP_dismiss_heat") --$ Let them sniff around.
-        complete()
 
-    elseif pendingMilestone == MILESTONE_LEGENDARY then
+    elseif milestone == MILESTONE_LEGENDARY then
         title("$MEGAMOD_SPEKREP_legend_title") --$ Legendary Joint
         text("$MEGAMOD_SPEKREP_legend_text") --$ Your speakeasy is legendary. People come from all over Chicago just to say they've been here. The name is whispered in every barbershop, taxi, and jazz club in the city. Even the out-of-towners know about it. Here's $1500 from the overflow crowds.
         BRScript:PlayerAddCash(1500, "CASH.SPEAKEASY_REPUTATION")
         option("$MEGAMOD_SPEKREP_dismiss_legend") --$ This is what we built.
-        complete()
-    else
-        complete()
     end
-
-    pendingMilestone = nil
-    pendingBarName = nil
-    pendingBarIid = nil
+    -- MEGAMOD FIX: no complete() in UI onTrigger (use-after-release); auto-complete
+    -- handles both the dialog and the unknown-milestone (no UI) case
 end
 
+-- MEGAMOD FIX: real police heat via the precinct (the old raiseGameEvent call was a
+-- UI toast only and applied nothing)
 function applyPoliceHeat()
-    if not pendingBarIid then return end
+    if not barIid then return end
 
     local playerFaction = WorldUtils:getPlayerFaction()
     if not playerFaction or not playerFaction.buildings then return end
 
     for i = 1, #playerFaction.buildings do
         local building = playerFaction.buildings[i]
-        if building and building.iid == pendingBarIid then
+        if building and building.iid == barIid then
             local precinct = building:getPrecinct()
             if precinct then
-                local curPoliceActivity = precinct:getPoliceActivity() or 0
-                Utils:raiseGameEvent("onPoliceActivityEffectApplied",
-                    "alertKey", "MEGAMOD_SPEKREP_HEAT_" .. tostring(pendingBarIid),
-                    "appliedPoliceActivity", 15,
-                    "originalValue", curPoliceActivity,
-                    "effectId", "MEGAMOD_SPEAKEASY_REPUTATION",
-                    "precinct", precinct,
-                    "description", {"$Text", "Speakeasy Reputation"})
+                precinct:addTemporaryPoliceActivity(15)
             end
             return
         end

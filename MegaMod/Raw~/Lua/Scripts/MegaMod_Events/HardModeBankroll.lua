@@ -16,7 +16,7 @@ dayCount = 0
 function GameEvent.onDayBegin(eventData)
     dayCount = dayCount + 1
     if dayCount >= 2 then
-        if World and World.difficulty and World.difficulty == 5 then
+        if WorldUtils:getWorldDifficulty() == 5 then  -- MEGAMOD FIX: `World` is unreachable in script sandbox (was silently never granting)
             BRScript:PlayerAddCash(20000, "CASH.MISSION_REWARD")
         end
         complete()

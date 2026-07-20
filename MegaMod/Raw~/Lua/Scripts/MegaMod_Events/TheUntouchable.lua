@@ -3,6 +3,10 @@
     Multi-week event chain. A new federal agent who can't be bought starts
     putting pressure on your empire. Three weeks of escalation, then a
     final decision.
+
+    Chain state lives in fact.MegaModUntouchableStage (world facts are save-
+    persisted and visible to every _id block, unlike script vars):
+      nil/0 = not started, 1 = warned, 2 = pressured, 3 = resolved
 --------------------------------------------------------------------------------]]
 
 _namespace = "WORLD_EVENTS"
@@ -22,13 +26,9 @@ function onTrigger()
     text("$MEGAMOD_UNTCH_warn_text") --$ Word travels fast in this city, and the word right now is bad. A new federal agent has been assigned to your district. Name's not important -- what's important is his reputation. Every gang in Detroit tried to buy him. Every gang in Detroit failed. He shut down three operations in his first month and put two bosses behind bars. They call him "The Untouchable" because nothing sticks to him -- no bribes, no threats, no favors. And now he's in Chicago, asking questions about you.
     option("$MEGAMOD_UNTCH_dismiss") --$ This could be trouble.
 
-    untouchableStage = 1
-    worldTimeCallback(triggerPressure, Utils:daysToSecs(7))
-    complete()
-end
-
-function triggerPressure()
-    WorldUtils:scheduleWithDelay("MegaModUntouchablePressure", 5, "TICK")
+    -- MEGAMOD FIX: chain via scheduleWithDelay; _delayedEvents survives save/load,
+    -- unlike worldTimeCallback which died when this event completed
+    WorldUtils:scheduleWithDelay("MegaModUntouchablePressure", Utils:daysToSecs(7), "TICK")
 end
 
 --[[------------------------------------------------------------------------------
@@ -49,21 +49,25 @@ function onTrigger()
         local bestCount = 0
 
         for _, building in next, playerFaction.buildings do
-            if building and building.precinct then
-                local p = building.precinct
-                precinctCounts[p] = (precinctCounts[p] or 0) + 1
-                if precinctCounts[p] > bestCount then
-                    bestCount = precinctCounts[p]
-                    bestPrecinct = p
+            if building then
+                local p = building:getPrecinct() -- MEGAMOD FIX: building.precinct doesn't exist
+                if p then
+                    precinctCounts[p] = (precinctCounts[p] or 0) + 1
+                    if precinctCounts[p] > bestCount then
+                        bestCount = precinctCounts[p]
+                        bestPrecinct = p
+                    end
                 end
             end
         end
 
         if bestPrecinct then
+            -- MEGAMOD FIX: real precinct heat (the game event below is only the UI toast)
+            bestPrecinct:addTemporaryPoliceActivity(20)
             Utils:raiseGameEvent("onPoliceActivityEffectApplied",
                 "alertKey", "MEGAMOD_UNTCH_PRESSURE",
                 "appliedPoliceActivity", 20,
-                "originalValue", 0,
+                "originalValue", bestPrecinct:getPoliceActivity() or 0,
                 "effectId", "MEGAMOD_UNTOUCHABLE_PRESSURE",
                 "precinct", bestPrecinct,
                 "description", {"$Text", "Federal Agent Investigation"})
@@ -75,13 +79,8 @@ function onTrigger()
     text("$MEGAMOD_UNTCH_pressure_text") --$ The Untouchable isn't wasting time. He's been making the rounds in your most profitable neighborhood, flashing his badge, asking questions, scaring your customers. The local cops are falling in line behind him -- nobody wants to be seen looking the other way when a fed is watching. Your businesses are feeling the squeeze. Revenue is down and your people are nervous.
     option("$MEGAMOD_UNTCH_dismiss") --$ He's making his move.
 
-    untouchableStage = 2
-    worldTimeCallback(triggerDecision, Utils:daysToSecs(7))
-    complete()
-end
-
-function triggerDecision()
-    WorldUtils:scheduleWithDelay("MegaModUntouchableDecision", 5, "TICK")
+    fact.MegaModUntouchableStage = 2
+    WorldUtils:scheduleWithDelay("MegaModUntouchableDecision", Utils:daysToSecs(7), "TICK")
 end
 
 --[[------------------------------------------------------------------------------
@@ -108,8 +107,7 @@ function digUpDirt()
         title("$MEGAMOD_UNTCH_dirt_broke_title") --$ Can't Afford It
         text("$MEGAMOD_UNTCH_dirt_broke_text") --$ You don't have $1500 to throw at private investigators and informants. The Untouchable keeps doing his thing, and you're left hoping for the best.
         option("$MEGAMOD_UNTCH_dismiss") --$ Damn.
-        untouchableStage = 3
-        complete()
+        fact.MegaModUntouchableStage = 3
         return
     end
 
@@ -127,41 +125,61 @@ function digUpDirt()
         option("$MEGAMOD_UNTCH_dismiss") --$ Money down the drain.
     end
 
-    untouchableStage = 3
-    complete()
+    fact.MegaModUntouchableStage = 3
 end
 
 function layLow()
+    -- MEGAMOD FIX: laying low now has a real cost (lost revenue) and a real
+    -- benefit (heat cools off in every precinct where you operate)
+    local playerFaction = WorldUtils:getPlayerFaction()
+    if playerFaction and playerFaction.cash then
+        local cost = math.min(500, playerFaction.cash.count)
+        if cost > 0 then
+            BRScript:PlayerSubtractCash(cost, "CASH.EXPENSES")
+        end
+    end
+    if playerFaction and playerFaction.buildings then
+        local seenPrecincts = {}
+        for _, building in next, playerFaction.buildings do
+            if building then
+                local p = building:getPrecinct()
+                if p and not seenPrecincts[p.id] then
+                    seenPrecincts[p.id] = true
+                    p:addTemporaryPoliceActivity(-15)
+                end
+            end
+        end
+    end
+
     title("$MEGAMOD_UNTCH_laylow_title") --$ Laying Low
     text("$MEGAMOD_UNTCH_laylow_text") --$ You pull back operations, tell your people to keep their heads down, and wait. It's not glamorous, and it's not cheap -- lost revenue adds up fast. But sometimes the smart play is no play at all. Give the fed a few weeks of nothing to find, and maybe he'll move on to easier targets.
     option("$MEGAMOD_UNTCH_dismiss") --$ Patience.
 
-    untouchableStage = 3
-    worldTimeCallback(triggerAllClear, Utils:daysToSecs(14))
-    complete()
-end
-
-function triggerAllClear()
-    WorldUtils:scheduleWithDelay("MegaModUntouchableAllClear", 5, "TICK")
+    fact.MegaModUntouchableStage = 3
+    WorldUtils:scheduleWithDelay("MegaModUntouchableAllClear", Utils:daysToSecs(14), "TICK")
 end
 
 function ignoreIt()
     if math.random() < 0.40 then
         -- Raid: lose cash + more heat
         local playerFaction = WorldUtils:getPlayerFaction()
-        if playerFaction.cash.count >= 1000 then
-            BRScript:PlayerSubtractCash(1000, "CASH.FINE")
+        -- MEGAMOD FIX: clamp the fine to available cash instead of skipping it entirely
+        local fine = math.min(1000, (playerFaction.cash and playerFaction.cash.count) or 0)
+        if fine > 0 then
+            BRScript:PlayerSubtractCash(fine, "CASH.FINE")
         end
 
         if playerFaction and playerFaction.buildings and #playerFaction.buildings > 0 then
             local building = playerFaction.buildings[1]
-            if building and building.precinct then
+            local precinct = building and building:getPrecinct()
+            if precinct then
+                precinct:addTemporaryPoliceActivity(30) -- real heat; the game event below is only the UI toast
                 Utils:raiseGameEvent("onPoliceActivityEffectApplied",
                     "alertKey", "MEGAMOD_UNTCH_RAID",
                     "appliedPoliceActivity", 30,
-                    "originalValue", 0,
+                    "originalValue", precinct:getPoliceActivity() or 0,
                     "effectId", "MEGAMOD_UNTOUCHABLE_RAID",
-                    "precinct", building.precinct,
+                    "precinct", precinct,
                     "description", {"$Text", "Federal Raid"})
             end
         end
@@ -176,8 +194,7 @@ function ignoreIt()
         option("$MEGAMOD_UNTCH_dismiss") --$ I'll take it.
     end
 
-    untouchableStage = 3
-    complete()
+    fact.MegaModUntouchableStage = 3
 end
 
 --[[------------------------------------------------------------------------------
@@ -193,36 +210,26 @@ function onTrigger()
     title("$MEGAMOD_UNTCH_allclear_title") --$ All Clear
     text("$MEGAMOD_UNTCH_allclear_text") --$ Your patience paid off. Two weeks of laying low and The Untouchable moved on to greener pastures -- or rather, greener speakeasies. Word is he's poking around the South Side now, giving someone else headaches. You can breathe easy and get back to business.
     option("$MEGAMOD_UNTCH_dismiss") --$ Back to work.
-    complete()
 end
 
 --[[------------------------------------------------------------------------------
     UNTOUCHABLE MONITOR - Background listener
+    MEGAMOD FIX: "Schedule" events are created inactive so GameEvent listeners
+    never fired; converted to the Create-listener pattern (see HardModeBankroll).
 --------------------------------------------------------------------------------]]
 _id = "MEGAMOD_UNTOUCHABLE_MONITOR"
 _event = "MegaModUntouchableMonitor"
 _gameStage = "Bridging"
-_autoStartMode = "Schedule"
-_triggerDelay = 300
+_autoStartMode = "Create"
 _category = "Misc"
 
-persist{}
-untouchableStage = 0
-
-persist{}
-untouchableCheckStarted = false
-
-function canTrigger()
-    return true
-end
-
-function onTrigger()
-    complete()
-end
-
 function GameEvent.onWeekBegin(e)
-    -- Only trigger initial event; subsequent stages use worldTimeCallback
-    if untouchableStage ~= 0 then return end
+    -- Only trigger the initial warning; later stages chain via scheduleWithDelay
+    if (fact.MegaModUntouchableStage or 0) ~= 0 then
+        complete()
+        return
+    end
+    if worldTime < 300 then return end -- MEGAMOD FIX: preserves the old _triggerDelay = 300
 
     local playerFaction = WorldUtils:getPlayerFaction()
     if not playerFaction then return end
@@ -233,6 +240,8 @@ function GameEvent.onWeekBegin(e)
 
     -- 12% chance per week once conditions are met
     if math.random() < 0.12 then
+        fact.MegaModUntouchableStage = 1 -- gate immediately so the warning can't re-pitch
         WorldUtils:scheduleWithDelay("MegaModUntouchableWarning", 5, "TICK")
+        complete() -- chain is self-driving from here; listener no longer needed
     end
 end

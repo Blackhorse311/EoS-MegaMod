@@ -12,29 +12,14 @@ _namespace = "WORLD_EVENTS"
 _id = "MEGAMOD_PROVOCATION_MONITOR"
 _event = "MegaModProvocationMonitor"
 _gameStage = "Bridging"
-_autoStartMode = "Schedule"
-_triggerDelay = 200
+_autoStartMode = "Create" -- MEGAMOD FIX: Schedule-mode events are created inactive so GameEvent listeners never register; Create keeps the monitor alive (see HardModeBankroll.lua)
 _category = "Misc"
 
 persist{}
 lastProvocationTime = 0
 
-persist{}
-provocationRivalIid = nil
-
-persist{}
-provocationTypeIndex = 0
-
 local provocationCooldownDays = 14
 local provocationChance = 0.25
-
-function canTrigger()
-    return true
-end
-
-function onTrigger()
-    complete()
-end
 
 function GameEvent.onWeekBegin(e)
     -- Cooldown check
@@ -63,11 +48,13 @@ function GameEvent.onWeekBegin(e)
 
     -- Pick a random rival and provocation type
     local rival = activeRivals[math.random(1, #activeRivals)]
-    provocationRivalIid = rival.iid
-    provocationTypeIndex = math.random(1, 3)
     lastProvocationTime = worldTime
 
-    WorldUtils:scheduleWithDelay("MegaModProvocationEvent", 5, "TICK")
+    -- MEGAMOD FIX: persist{} vars are not shared across _id blocks; pass the rival and
+    -- provocation type through the event payload (factions are identified by factionId)
+    WorldUtils:scheduleWithDelay("MegaModProvocationEvent", 5, "TICK",
+        "provocationRivalFactionId", rival.factionId,
+        "provocationTypeIndex", math.random(1, 3))
 end
 
 --[[------------------------------------------------------------------------------
@@ -76,6 +63,12 @@ end
 _id = "MEGAMOD_PROVOCATION_EVENT"
 _event = "MegaModProvocationEvent"
 _category = "Misc"
+
+persist{}
+provocationRivalFactionId = nil
+
+persist{}
+provocationTypeIndex = 0
 
 function canTrigger()
     return true
@@ -100,76 +93,87 @@ function onTrigger()
     option("$MEGAMOD_PROVOC_slide", letItSlide) --$ Let it slide
 end
 
+-- MEGAMOD FIX: pages set inside option callbacks never display (the event window doesn't
+-- re-render and the event auto-completes on option click), so results are shown as a
+-- separate event like vanilla racket events do
+function showProvocResult(titleKey, textKey)
+    WorldUtils:scheduleWithDelay("MegaModProvocationResult", 5, "TICK", "resultTitle", titleKey, "resultText", textKey)
+end
+
+-- MEGAMOD FIX: faction lookup by factionId (factions have no .iid, so the old iid-based
+-- lookup always returned nil)
+function getProvocationRival()
+    local rival = WorldUtils:getFactionByFactionId(provocationRivalFactionId)
+    if rival and rival._active then
+        return rival
+    end
+    return nil
+end
+
 function retaliateOption()
     local playerFaction = WorldUtils:getPlayerFaction()
     if not playerFaction or playerFaction.cash.count < 500 then
-        title("$MEGAMOD_PROVOC_broke_title") --$ Can't Afford It
-        text("$MEGAMOD_PROVOC_broke_text") --$ You don't have $500 to fund a proper retaliation. Your boys look at you, waiting. Sometimes the wallet decides for you.
-        option("$MEGAMOD_PROVOC_dismiss") --$ Damn.
-        complete()
+        showProvocResult("$MEGAMOD_PROVOC_broke_title", "$MEGAMOD_PROVOC_broke_text") --$ Can't Afford It / You don't have $500 to fund a proper retaliation. Your boys look at you, waiting. Sometimes the wallet decides for you.
         return
     end
 
     BRScript:PlayerSubtractCash(500, "CASH.RETALIATION")
 
+    -- MEGAMOD FIX: MOLE_DISCOVERED is a morale config, not a rating effect; AGGRESSIVE_BEHAVIOUR
+    -- is the verified RatingEffects id for hitting back with violence
+    local rival = getProvocationRival()
+    if rival then
+        rival.rating:applyEffect(playerFaction, "AGGRESSIVE_BEHAVIOUR")
+    end
+
     -- 60% chance rival backs down, 40% escalates
     if math.random() < 0.60 then
         -- Rival backs down, but relations worsen
-        local rival = getRivalByIid(provocationRivalIid)
-        if rival then
-            rival.rating:applyEffect(playerFaction, "MOLE_DISCOVERED")
-        end
-        title("$MEGAMOD_PROVOC_ret_success_title") --$ Message Received
-        text("$MEGAMOD_PROVOC_ret_success_text") --$ Your boys hit back hard. Smashed up one of their joints and left a few bruises as souvenirs. Word gets back that the rival boss is fuming but told his crew to stand down. They got the message, but don't expect a Christmas card.
-        option("$MEGAMOD_PROVOC_dismiss") --$ That settles it.
+        showProvocResult("$MEGAMOD_PROVOC_ret_success_title", "$MEGAMOD_PROVOC_ret_success_text") --$ Message Received / Your boys hit back hard. Smashed up one of their joints and left a few bruises as souvenirs. Word gets back that the rival boss is fuming but told his crew to stand down. They got the message, but don't expect a Christmas card.
     else
         -- Escalation
-        local rival = getRivalByIid(provocationRivalIid)
-        if rival then
-            rival.rating:applyEffect(playerFaction, "MOLE_DISCOVERED")
-        end
-        title("$MEGAMOD_PROVOC_ret_fail_title") --$ Things Got Worse
-        text("$MEGAMOD_PROVOC_ret_fail_text") --$ Your crew hit them back, but it only made things worse. They retaliated the same night, torching one of your stash houses. This is turning into a real feud, and it's going to cost more before it's over.
-        option("$MEGAMOD_PROVOC_dismiss") --$ This isn't over.
+        showProvocResult("$MEGAMOD_PROVOC_ret_fail_title", "$MEGAMOD_PROVOC_ret_fail_text") --$ Things Got Worse / Your crew hit them back, but it only made things worse. They retaliated the same night, torching one of your stash houses. This is turning into a real feud, and it's going to cost more before it's over.
     end
-    complete()
 end
 
 function threatenBack()
     -- 30% chance rival backs down
     if math.random() < 0.30 then
-        local rival = getRivalByIid(provocationRivalIid)
+        -- MEGAMOD FIX: THREATENED is the verified RatingEffects id (was MOLE_DISCOVERED, a morale config)
+        local rival = getProvocationRival()
         if rival then
-            rival.rating:applyEffect(WorldUtils:getPlayerFaction(), "MOLE_DISCOVERED")
+            rival.rating:applyEffect(WorldUtils:getPlayerFaction(), "THREATENED")
         end
-        title("$MEGAMOD_PROVOC_thr_success_title") --$ Words Were Enough
-        text("$MEGAMOD_PROVOC_thr_success_text") --$ You sent your most intimidating enforcer to deliver a message in person. Something about the look in his eyes convinced them to back off. No blood spilled, no cash spent, and you kept your reputation intact.
-        option("$MEGAMOD_PROVOC_dismiss") --$ Good enough.
+        showProvocResult("$MEGAMOD_PROVOC_thr_success_title", "$MEGAMOD_PROVOC_thr_success_text") --$ Words Were Enough / You sent your most intimidating enforcer to deliver a message in person. Something about the look in his eyes convinced them to back off. No blood spilled, no cash spent, and you kept your reputation intact.
     else
-        title("$MEGAMOD_PROVOC_thr_fail_title") --$ They Laughed It Off
-        text("$MEGAMOD_PROVOC_thr_fail_text") --$ Your threats fell on deaf ears. The rival crew thought it was funny, actually. You can hear them laughing from across town. Empty words without action behind them just make you look weak.
-        option("$MEGAMOD_PROVOC_dismiss") --$ Should've hit harder.
+        showProvocResult("$MEGAMOD_PROVOC_thr_fail_title", "$MEGAMOD_PROVOC_thr_fail_text") --$ They Laughed It Off / Your threats fell on deaf ears. The rival crew thought it was funny, actually. You can hear them laughing from across town. Empty words without action behind them just make you look weak.
     end
-    complete()
 end
 
 function letItSlide()
-    title("$MEGAMOD_PROVOC_slide_title") --$ Turning the Other Cheek
-    text("$MEGAMOD_PROVOC_slide_text") --$ You swallow your pride and let it go. No point starting a war over a broken window or a bruised ego. Your crew doesn't love the decision, but they'll live. The rival gang will see it as weakness, though, and that's a currency you can't afford to lose.
-    option("$MEGAMOD_PROVOC_dismiss") --$ Move on.
-    complete()
+    showProvocResult("$MEGAMOD_PROVOC_slide_title", "$MEGAMOD_PROVOC_slide_text") --$ Turning the Other Cheek / You swallow your pride and let it go. No point starting a war over a broken window or a bruised ego. Your crew doesn't love the decision, but they'll live. The rival gang will see it as weakness, though, and that's a currency you can't afford to lose.
 end
 
-function getRivalByIid(iid)
-    if not iid then return nil end
-    local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction then return nil end
-    local knownGangs = playerFaction.diplomacy:getKnownGangs()
-    if not knownGangs then return nil end
-    for i = 1, #knownGangs do
-        if knownGangs[i].iid == iid then
-            return knownGangs[i]
-        end
-    end
-    return nil
+--[[------------------------------------------------------------------------------
+    Provocation Result Dialog
+--------------------------------------------------------------------------------]]
+_id = "MEGAMOD_PROVOCATION_RESULT"
+_event = "MegaModProvocationResult"
+_category = "Misc"
+
+persist{}
+resultTitle = nil
+
+persist{}
+resultText = nil
+
+function canTrigger()
+    return true
+end
+
+function onTrigger()
+    setModal(true)
+    title(resultTitle)
+    text(resultText)
+    option("$MEGAMOD_PROVOC_dismiss")
 end
