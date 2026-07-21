@@ -30,8 +30,9 @@ _namespace = "WORLD_EVENTS"
 -- ---------------------------------------------------------------------------
 -- Tunables
 -- ---------------------------------------------------------------------------
-local WEEKLY_EVENT_CHANCE = 0.35 -- chance per week that the director attempts a pick at all (scaled by fact.MegaModCfgEvents, clamped to [0, 0.9])
-local MAX_PICKS_PER_WEEK = 1     -- independent pick attempts per onWeekBegin
+local WEEKLY_EVENT_CHANCE = 0.35 -- chance per ROLL WEEK that the director attempts a pick at all (scaled by fact.MegaModCfgEvents, clamped to [0, 0.9])
+local ROLL_INTERVAL_WEEKS = 6    -- the director only rolls every Nth week (James 2026-07-20: weekly rolls made events feel constant)
+local MAX_PICKS_PER_WEEK = 1     -- independent pick attempts per roll week
 local GRACE_PERIOD = 200         -- no director events before worldTime 200 (world-seconds, same scale as the monitors' worldTime gates)
 local GLOBAL_COOLDOWN_DAYS = 4   -- minimum days between any two director-launched events
 local MAX_SUBSTITUTIONS = 2      -- contract: max substitute-picks after passes, per roll
@@ -130,7 +131,10 @@ persist{}
 rollSubstitutions = 0 -- scratch: substitute-picks consumed this roll
 
 persist{}
-prosperityState = "normal" -- rubber-band state: "poor" | "normal" | "rich"; recomputed each onWeekBegin before the roll
+prosperityState = "normal" -- rubber-band state: "poor" | "normal" | "rich"; recomputed each roll week before the roll
+
+persist{}
+weeksSinceLastRoll = 0 -- onWeekBegin counter; the director only rolls every ROLL_INTERVAL_WEEKS weeks
 
 function onCreate()
     disableAutoComplete() -- permanent listener; must never auto-complete
@@ -240,6 +244,11 @@ end
 
 function GameEvent.onWeekBegin(e)
     if worldTime < GRACE_PERIOD then return end
+
+    -- Only roll every Nth week; off-weeks just advance the counter
+    weeksSinceLastRoll = weeksSinceLastRoll + 1
+    if weeksSinceLastRoll < ROLL_INTERVAL_WEEKS then return end
+    weeksSinceLastRoll = 0
 
     -- MEGAMOD CONFIG: weekly prosperity read for the rubber-band weight tilt
     -- (the whole pick cascade resolves inside this frame, so once per roll is enough)

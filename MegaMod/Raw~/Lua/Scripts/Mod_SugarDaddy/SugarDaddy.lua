@@ -405,7 +405,11 @@ target.targetLowFactionRating = 0
 target.targetSubduedCharacter = 0
 movement = {}
 movement.SeekCoverFilter = 50
--- We don't care about any of these, we just want to run around into cover spots, even if that puts us close to enemies.
+-- MEGAMOD FIX: strong negative enemy-proximity weight so his lordship picks cover AWAY from
+-- the shooting instead of diving behind the crate next to it (filter allows negative weights;
+-- vanilla skittish profiles use -100). LeaveCombatArea stays 0 so he never exits the combat
+-- area -- he has to stay a combat actor for the patronage payout, and he DOES want to watch.
+movement.EnemyProximityFilter = -100
 movement.RangeBandFilter = 0
 movement.MoveTowardsEnemiesFilter = 0
 movement.SeekFlankingFilter = 0

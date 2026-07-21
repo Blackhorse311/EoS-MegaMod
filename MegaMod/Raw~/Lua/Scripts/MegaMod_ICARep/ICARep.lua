@@ -116,6 +116,7 @@ function ClearContractState()
     them.memory.icaTargetOrigFactionId = nil
     them.memory.icaGuardSquad = nil
     them.memory.icaSpawnGuards = nil
+    them.memory.icaFearKills = nil
 
     contractActive = false
     currentTarget = nil
@@ -380,8 +381,16 @@ end
 function StatusCheck()
     say("$MEGAMOD_BANK_still_alive") --$ The target is still breathing. Get it done and come see me.
     option("$MEGAMOD_BANK_where_active", ShowActiveTarget) --$ Where is the target?
+    option("$MEGAMOD_BANK_howto_flush", ExplainFlush) --$ The target's holed up somewhere I can't get into.
     option("$MEGAMOD_BANK_cancel", CancelContract) --$ I want to cancel the contract
     option("$MEGAMOD_BANK_leave_status", Leave) --$ I'm working on it
+end
+
+-- MEGAMOD ICA FLUSH: Mr. Smith explains the fear mechanic (the count he quotes
+-- must match ICA_FEAR_KILLS_TO_FLUSH in the behaviour below)
+function ExplainFlush()
+    say("$MEGAMOD_BANK_flush_answer") --$ Ah, a man gone to ground. We see this often, my friend, and our field manual is very clear on the subject: a man in hiding does not watch the streets. He listens to them. The muscle that guards men like him -- the thugs, the rented guns, the two-dollar toughs on every corner -- they are his ears, and they talk. Put four of them in the ground, loudly, anywhere in this city, and I promise you his nerve will not survive the arithmetic. He will bolt for open air like a rat from a burning wall. And a man in the open, my friend...well. That is where you come in.
+    option("$MEGAMOD_BANK_flush_got_it", BackToStatus) --$ Loud. I can do loud.
 end
 
 function ShowActiveTarget()
@@ -454,41 +463,52 @@ _name = "MegaModICARepBehaviour"
 -- As `local function`s they had no sandbox env (WorldUtils was nil inside them), and
 -- ensureTargetAccessible was declared AFTER its caller, so the call site saw nil and
 -- contract missions never started.
--- Move a target to the street if they're in a rival-owned building the player
--- can't enter. Teleports them to the exterior of their current neighborhood.
-function ensureTargetAccessible(target)
-    if not target or target:isDead() then return end
+-- True while the target sits inside a building owned by a non-player faction
+-- (loc.building / building.faction are the same reads AcceptContract uses)
+function icaTargetIsHiddenFromPlayer(target)
+    local loc = WorldUtils:getLocationFromId(target:getLocationId())
+    if not loc or not loc.isInterior or not loc.building then return false end
+    local owner = loc.building.faction
+    return owner ~= nil and not owner.isPlayerFaction
+end
 
+-- Teleport the target from inside a building to that building's neighborhood
+-- exterior. Returns true if they were moved.
+-- MEGAMOD FIX: match hood buildings by object identity OR interiorLocationId.
+-- The old scan compared building.locationId against the target's INTERIOR
+-- location id -- vanilla keeps the interior id in building.interiorLocationId
+-- (Faction.lua), so the match could silently never fire and hidden targets
+-- stayed hidden forever.
+function icaFlushTargetToStreet(target)
+    if not target or target:isDead() then return false end
     local targetLocId = target:getLocationId()
-    if not targetLocId then return end
+    if not targetLocId then return false end
+    local loc = WorldUtils:getLocationFromId(targetLocId)
+    if not loc or not loc.isInterior or not loc.building then return false end
 
-    local playerFaction = WorldUtils:getPlayerFaction()
-    if not playerFaction then return end
-
-    -- Build a map of building locationId -> neighborhood exterior + building ref
     local neighborhoods = WorldUtils:getExteriorLocations()
-    if not neighborhoods then return end
-
+    if not neighborhoods then return false end
     for i = 1, #neighborhoods do
         local hood = neighborhoods[i]
-        -- Check if target's location is the exterior itself (already outside)
-        if hood.id == targetLocId then return end
-
         if hood.buildings then
             for j = 1, #hood.buildings do
                 local building = hood.buildings[j]
-                if building.locationId == targetLocId then
-                    -- Found the building the target is in
-                    local owner = building.getOwnerFaction and building:getOwnerFaction()
-                    if owner and owner ~= playerFaction and not owner.isPlayerFaction then
-                        -- Target is in a rival-owned building, move them outside
-                        target:setLocationId(hood.id)
-                    end
-                    return
+                if building == loc.building or building.interiorLocationId == targetLocId then
+                    target:setLocationId(hood.id)
+                    return true
                 end
             end
         end
     end
+    return false
+end
+
+-- Move a target to the street if they're in a rival-owned building the player
+-- can't enter. Teleports them to the exterior of their current neighborhood.
+function ensureTargetAccessible(target)
+    if not target or target:isDead() then return end
+    if not icaTargetIsHiddenFromPlayer(target) then return end
+    icaFlushTargetToStreet(target)
 end
 
 function getPrecinctKey(member) -- MEGAMOD FIX: global (was local function, see above)
@@ -555,6 +575,42 @@ function GameEvent.onDayBegin(e)
     -- MEGAMOD FIX: cancellation of a running mission is handled by the mission script
     -- itself (EliminateTargetCheck watches icaCancelContract); a not-yet-created mission
     -- is cancelled in the conversation by clearing icaPendingMission.
+end
+
+-- MEGAMOD ICA FLUSH: while a contract target is holed up somewhere the player
+-- can't enter, every street thug the PLAYER kills rattles them; at the
+-- threshold the target loses their nerve and bolts to the open street.
+-- (James 2026-07-20: needed an active way to smoke out inaccessible targets.)
+-- Kill attribution via the Dead state's killerFaction (SalBonus pattern,
+-- vanilla Health.lua DEAD onAdd). Counter lives in actor memory so it
+-- survives save/load; cleared on every contract end path.
+ICA_FEAR_KILLS_TO_FLUSH = 4 -- keep in sync with Mr. Smith's flush_answer dialog
+
+function GameEvent.onCharacterDeath(e)
+    local mem = thisActor.memory
+    if not mem.icaContractActive then return end
+    if mem.icaAccessBuilding then return end -- access granted; target already reachable
+    local target = mem.icaActiveTarget
+    if not target or target.isDeleted or target:isDead() then return end
+
+    local dead = e.target
+    if not dead or dead == target then return end
+    if not (dead.faction and dead.faction.isThugFaction) then return end
+    local deathInformation = dead:getState("Dead")
+    local killerFaction = deathInformation and deathInformation.killerFaction
+    if not killerFaction or not killerFaction.isPlayerFaction then return end
+
+    if not icaTargetIsHiddenFromPlayer(target) then return end -- already in the open
+
+    mem.icaFearKills = (mem.icaFearKills or 0) + 1
+    if mem.icaFearKills < ICA_FEAR_KILLS_TO_FLUSH then return end
+    mem.icaFearKills = nil
+
+    if icaFlushTargetToStreet(target) then
+        -- Short delay so the notice lands after the fight wraps up
+        WorldUtils:scheduleWithDelay("MegaModICATargetFlushed", 10, "TICK",
+            "flushedTargetName", mem.icaActiveTargetName)
+    end
 end
 
 -- MEGAMOD ICA ACCESS: when the player's selected character walks into the
@@ -666,6 +722,27 @@ function refreshTargets()
 end
 
 --[[------------------------------------------------------------------------------
+    WORLD_EVENTS: flush notification (scheduled by the behaviour's fear counter)
+--------------------------------------------------------------------------------]]
+_namespace = "WORLD_EVENTS"
+_id = "MEGAMOD_ICA_FLUSHED"
+_event = "MegaModICATargetFlushed"
+_category = "Misc"
+
+persist{}
+flushedTargetName = nil -- Expected Param
+
+function canTrigger()
+    return flushedTargetName ~= nil
+end
+
+function onTrigger()
+    title("$MEGAMOD_ICA_flushed_title") --$ The Target Bolts
+    text({"$MEGAMOD_ICA_flushed_text", flushedTargetName}) --$ Word travels fast when street muscle starts dying. Our sources report that {0} has lost their nerve -- seen slipping out a side door with collar up and hat brim low, and no plan beyond AWAY. The target is in the open now, my friend. Frightened people do not stay found for long. Move.
+    option("$MEGAMOD_ICA_flushed_dismiss") --$ They can run all they like.
+end
+
+--[[------------------------------------------------------------------------------
     MISSIONS: ICA Contract Side Quest
     Uses plain string description (parameterized arrays corrupt mission journal UI).
     Vanilla engine file overrides (Missions.lua etc.) were the cause of journal
@@ -753,6 +830,7 @@ function onMissionFail()
         mem.icaTargetOrigFactionId = nil
         mem.icaGuardSquad = nil
         mem.icaSpawnGuards = nil
+        mem.icaFearKills = nil
         mem.icaContractActive = nil
         mem.icaActiveTarget = nil
         mem.icaActiveTargetName = nil

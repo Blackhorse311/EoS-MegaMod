@@ -2586,5 +2586,11 @@
   "$MEGAMOD_PROFILE_normal_done_text": "No favors asked, none given. The city charges what it charges, pays what it pays, and the law leans exactly as hard as the law leans. Whatever you build, you'll have built it on the same crooked ground as everybody else.",
   "$MEGAMOD_PROFILE_normal_done_title": "Straight Business",
   "$MEGAMOD_PROFILE_text": "Before the first barrel rolls and the first palm gets greased, ask yourself what kind of outfit this is going to be. Some bosses like the easy money and the quiet streets. Some like it straight. And some want every cop, fed, and rival gun in Chicago coming at them at once -- just to prove it can be done. Choose how the city treats you. There's no changing it once the word is out.",
-  "$MEGAMOD_PROFILE_title": "How Do You Want to Run This Town?"
+  "$MEGAMOD_PROFILE_title": "How Do You Want to Run This Town?",
+  "$MEGAMOD_BANK_flush_answer": "Ah, a man gone to ground. We see this often, my friend, and our field manual is very clear on the subject: a man in hiding does not watch the streets. He listens to them. The muscle that guards men like him -- the thugs, the rented guns, the two-dollar toughs on every corner -- they are his ears, and they talk. Put four of them in the ground, loudly, anywhere in this city, and I promise you his nerve will not survive the arithmetic. He will bolt for open air like a rat from a burning wall. And a man in the open, my friend...well. That is where you come in.",
+  "$MEGAMOD_BANK_flush_got_it": "Loud. I can do loud.",
+  "$MEGAMOD_BANK_howto_flush": "The target's holed up somewhere I can't get into.",
+  "$MEGAMOD_ICA_flushed_dismiss": "They can run all they like.",
+  "$MEGAMOD_ICA_flushed_text": "Word travels fast when street muscle starts dying. Our sources report that {0} has lost their nerve -- seen slipping out a side door with collar up and hat brim low, and no plan beyond AWAY. The target is in the open now, my friend. Frightened people do not stay found for long. Move.",
+  "$MEGAMOD_ICA_flushed_title": "The Target Bolts"
 }

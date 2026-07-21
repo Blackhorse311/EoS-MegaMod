@@ -8,7 +8,7 @@ referenced = set()
 
 key_re = re.compile(r'"(\$MEGAMOD_[A-Za-z0-9_]+)"')
 
-for path in sorted(glob.glob('MegaMod/Raw~/Lua/Scripts/MegaMod_Events/*.lua')):
+for path in sorted(glob.glob('MegaMod/Raw~/Lua/Scripts/**/*.lua', recursive=True)):
     for line in open(path, encoding='utf-8'):
         keys = key_re.findall(line)
         if not keys:
