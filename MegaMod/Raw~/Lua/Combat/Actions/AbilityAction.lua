@@ -1162,6 +1162,18 @@ function AbilityAction:onPoolRelease()
         AbilityInformation:release(curAbilityInfoObject)
         self._potentialAbilityInfoObject = nil
     end
+    -- MEGAMOD FIX: a mid-ability weapon switch (Swindler's Shot does this) can
+    -- pool-release the action after target confirmation but before onExecuteDone
+    -- runs. Vanilla only released the POTENTIAL info object here, leaking the
+    -- confirmed one -- whose AreaOfEffect line visuals (the flight-path arrows)
+    -- then stay rendered in the location forever. Releasing it runs
+    -- hideAffectedTiles + AreaOfEffect release. Safe: every other release site
+    -- nils the field before releasing, so no double release is possible.
+    local confirmedInfoObject = self._confirmedAbilityInfoObject
+    if confirmedInfoObject then
+        self._confirmedAbilityInfoObject = nil
+        AbilityInformation:release(confirmedInfoObject)
+    end
     self._activeScenario = nil
     self._focusScenario = nil
     self._doAbilityScenario = nil

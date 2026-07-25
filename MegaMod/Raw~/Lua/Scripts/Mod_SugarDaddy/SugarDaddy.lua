@@ -251,6 +251,11 @@ function GameEvent.onDayBegin(eventData)
     local secondsSinceLastCombat = (worldTime - lastCombatTime)
     if (secondsSinceLastCombat > secondsUntilBored) and not bored then
         bored = true
+        -- MEGAMOD FIX: restart the clock from the bored threshold so the leave
+        -- always comes daysUntilLeave - daysUntilBored AFTER this warning, as
+        -- the warning text promises -- never the very next day because the
+        -- clock was already past the leave threshold
+        lastCombatTime = worldTime - secondsUntilBored
         weeklyCash = 10 -- Set the weekly cash to 10 bucks
         setWeeklyCash() -- Update it in the cash manager
         -- Trigger the bored event
@@ -297,10 +302,32 @@ movePosY = 0
 -- Instead of saving the above, we're going to set it to our own position when this behaviour activates (adds or loads)
 function onActivate()
     movePosX, movePosY = thisActor:getPosXY()
+
+    -- MEGAMOD FIX: persisted actor references don't reliably rehydrate across
+    -- save/load (established mod pattern is to store iids, not refs). A broken
+    -- followTarget killed the frame follow every frame, stranding his lordship
+    -- wherever he stood -- he then missed every combat and "got bored" despite
+    -- the player fighting constantly. Re-derive the player on every activate.
+    followTarget = Character:getPlayer()
+
+    -- MEGAMOD FIX: if the boredom clock is stale past the LEAVE threshold
+    -- (it ran unattended while the follow was broken), clamp it back to the
+    -- bored threshold so he never skips straight to leaving without the
+    -- promised couple-of-weeks grace after the bored warning. Plain arithmetic
+    -- here (86400 secs/day) -- onActivate also runs during save-load.
+    if (worldTime - (lastCombatTime or 0)) > (daysUntilLeave * 86400) then
+        lastCombatTime = worldTime - (daysUntilBored * 86400)
+    end
 end
 
 -- The custom follow behaviour, this will update every frame.
 function GameEvent.frame(e)
+    -- MEGAMOD FIX: never index a nil/broken follow target (see onActivate);
+    -- lazily re-derive so the follow self-heals no matter how it broke
+    if not followTarget then
+        followTarget = Character:getPlayer()
+        if not followTarget then return end
+    end
     if followTarget:getLocationId() ~= thisActor:getLocationId() then -- They've entered a new location, teleport us near them
         thisActor:setLocationId(0)
         local posX, posY, posZ = followTarget:get3DPosXYZ()
