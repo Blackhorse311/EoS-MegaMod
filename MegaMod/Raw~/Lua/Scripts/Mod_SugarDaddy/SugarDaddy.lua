@@ -322,12 +322,11 @@ end
 
 -- The custom follow behaviour, this will update every frame.
 function GameEvent.frame(e)
-    -- MEGAMOD FIX: never index a nil/broken follow target (see onActivate);
-    -- lazily re-derive so the follow self-heals no matter how it broke
-    if not followTarget then
-        followTarget = Character:getPlayer()
-        if not followTarget then return end
-    end
+    -- MEGAMOD FIX: never trust the persisted ref at all -- a stale-but-truthy
+    -- actor ref after load silently killed this handler every frame. Fetch the
+    -- live player each frame; the accessor is cheap.
+    followTarget = Character:getPlayer()
+    if not followTarget then return end
     if followTarget:getLocationId() ~= thisActor:getLocationId() then -- They've entered a new location, teleport us near them
         thisActor:setLocationId(0)
         local posX, posY, posZ = followTarget:get3DPosXYZ()
@@ -339,15 +338,33 @@ function GameEvent.frame(e)
         movePosX, movePosY = thisActor:getPosXY()
     else
         local targetPosX, targetPosY = followTarget:getPosXY()
-        local distToTarget = Utils:calcDistance(movePosX, movePosY, targetPosX, targetPosY)
-        if distToTarget > 20 then -- They've likely taken a taxi, or some other fast travel method, teleport us near them
+        -- MEGAMOD FIX: the vanilla catch-up branch was doubly broken. It
+        -- measured distance from his last move ORDER (movePos), not from where
+        -- he actually stands, and its "teleport" only primed a spawn position
+        -- without a location re-entry -- a no-op (setupSafeSpawnPos applies on
+        -- coming out of the void, per its own docs). Net effect: fall more
+        -- than 20 units behind inside the same neighborhood and he froze there
+        -- forever, outside the combat sweep radius -- "he won't follow me to
+        -- the fight". Measure his REAL position and void-cycle him like the
+        -- cross-location branch does. Guarded so we never yank anyone who is
+        -- mid-combat.
+        local myPosX, myPosY = thisActor:getPosXY()
+        local actualDist = Utils:calcDistance(myPosX, myPosY, targetPosX, targetPosY)
+        if actualDist > 20
+            and not thisActor:hasTag("InCombat")
+            and not followTarget:hasTag("InCombat") then
+            thisActor:setLocationId(0)
             local posX, posY, posZ = followTarget:get3DPosXYZ()
             local rotation = math.random(360) -- pick a random rotation in degrees to face
             local minDistance = 1
             local maxDistance = 3
             thisActor:setupSafeSpawnPosXYZ(posX, posY, posZ, rotation, minDistance, maxDistance)
+            thisActor:setLocationId(followTarget:getLocationId())
             movePosX, movePosY = thisActor:getPosXY()
-        elseif distToTarget > 5 then
+            return
+        end
+        local distToTarget = Utils:calcDistance(movePosX, movePosY, targetPosX, targetPosY)
+        if distToTarget > 5 then
             -- Update our moveTo position and navigate to it
             -- Pick a random orbit 1 unit radius away from the followTarget (i.e. player)
             -- This random rotation is in radians instead of degrees, as we're using it with the math library sin and cos functions
