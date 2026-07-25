@@ -2649,5 +2649,8 @@
   "$MEGAMOD_MADSAM_terms_title": "Sam's Terms",
   "$MEGAMOD_VESTGIFT_option": "Somebody upstairs likes us.",
   "$MEGAMOD_VESTGIFT_text": "A doughboy in a threadbare Army coat leaves a heavy canvas bundle with one of your guys and vanishes down the alley. Inside: two military issue protective vests, the real thing, straight off a quartermaster's truck in France. A note pinned to the canvas reads: \"For services rendered. Keep your people breathing.\" No name. No return address.",
-  "$MEGAMOD_VESTGIFT_title": "A Gift from the Great War"
+  "$MEGAMOD_VESTGIFT_title": "A Gift from the Great War",
+  "$MEGAMOD_ELECTION_repair_dismiss": "About time.",
+  "$MEGAMOD_ELECTION_repair_text": "A ward boss corners you outside your safehouse. \"That contribution of yours didn't go unnoticed, friend. The party's been meaning to call on you for those favors we discussed -- there was some... clerical confusion. Expect word from us again soon. Chicago politics, eh?\"",
+  "$MEGAMOD_ELECTION_repair_title": "The Party Hasn't Forgotten You"
 }
