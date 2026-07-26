@@ -54,6 +54,16 @@ end
 function GameEvent.onDayBegin(e)
     -- Idempotent daily sweep: initial population plus catch-up for anything missed
     populateAllSafehouses()
+
+    -- MEGAMOD: stage-entry event creation never re-runs on loaded saves
+    -- (WorldEvents persists _lastProcessedGameStage), so events added by a mod
+    -- update can only ever exist in new games. Bootstrap the election repair
+    -- from here: this listener provably lives in every modded save. The repair
+    -- event's own onCreate sets Hosted, so new games never double-create.
+    if not fact.MegaModElectionRepairHosted and not fact.MegaModElectionRepairDone then
+        fact.MegaModElectionRepairHosted = true
+        WorldUtils:createEvent("MegaModElectionRepair")
+    end
 end
 
 function GameEvent.onSafehouseAcquired(e)

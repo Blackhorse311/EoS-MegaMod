@@ -474,6 +474,9 @@ _category = "MidGameEvent"
 
 function onCreate()
     disableAutoComplete()
+    -- Tells the SafehouseManager bootstrap an instance already exists (auto-
+    -- created at Bridging entry in new games, or bootstrapped into old saves)
+    fact.MegaModElectionRepairHosted = true
 end
 
 function GameEvent.onDayBegin(e)
