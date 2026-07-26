@@ -151,7 +151,10 @@ function onMissionSuccess()
         addTraitReward("Cruel")
     end
 
-    charlyPlacement:release()
+    -- MEGAMOD: nil-guard; the self-heal leaves this nil when no alley was available
+    if charlyPlacement then
+        charlyPlacement:release()
+    end
     if barPlacement then
         barPlacement:release()
     end
@@ -233,6 +236,18 @@ function GameEvent.onPlacementInvalidated(e)
                 setDescription({"$GiftAndTheGrainHelpCharly_desc", bar.name, wardName})
             end
         end
+    elseif e.placement == charlyPlacement then
+        -- MEGAMOD: vanilla only guards the brewery/bar placements. When a ward
+        -- flip invalidates the alley placement, the pooled object is cleared and
+        -- recycled while the mission still holds the ref; Charly then spawns into
+        -- location 0 (limbo, no map marker). Re-acquire immediately; if no alley
+        -- is available right now, the TalkToCharlyCheck self-heal keeps retrying.
+        charlyPlacement = WorldUtils:acquirePlacement(
+            MissionUtils:alleyPlacementRules()
+        )
+        if charlyPlacement and charly then
+            ActorUtils:placeActorAtPlacement("NPC", "NPC.MISSION_CHARLY_COMBAT", charlyPlacement, charly.iid)
+        end
     end
 end
 
@@ -281,13 +296,44 @@ function TalkToCharly()
     }
     setDescription("$GiftAndTheGrainFindCharly_desc") --$ Get over to the garage that Charly Flint operates from and see if she's there.
 
-    charly = ActorUtils:placeActorAtPlacement("NPC", "NPC.MISSION_CHARLY_COMBAT", charlyPlacement) --Changing the npc config Charly is using to the new one we made which will allow her to combat
-    charly.memory.GiftAndTheGrain_Bar = bar
-    MissionUtils:setEntryPoint(charly, "TheGiftAndTheGrain2_Start")
-    addPOI(charly)
+    -- MEGAMOD: the alley placement can die between mission start and this
+    -- objective (invalidation clears pooled placements; see onPlacementInvalidated)
+    if not (charlyPlacement and charlyPlacement.placementType) then
+        charlyPlacement = WorldUtils:acquirePlacement(
+            MissionUtils:alleyPlacementRules()
+        )
+    end
+    if charlyPlacement then
+        charly = ActorUtils:placeActorAtPlacement("NPC", "NPC.MISSION_CHARLY_COMBAT", charlyPlacement) --Changing the npc config Charly is using to the new one we made which will allow her to combat
+        charly.memory.GiftAndTheGrain_Bar = bar
+        MissionUtils:setEntryPoint(charly, "TheGiftAndTheGrain2_Start")
+        addPOI(charly)
+    end
 end
 
 function TalkToCharlyCheck()
+    -- MEGAMOD self-heal, polled while this objective is active: if the alley
+    -- placement ref is dead or Charly is stranded in the void (location 0), grab
+    -- a fresh alley and (re)place her there. Also rescues saves broken before
+    -- this fix existed. The old ref is deliberately NOT released -- the pool may
+    -- already have recycled it to another owner.
+    local placementDead = not (charlyPlacement and charlyPlacement.placementType)
+    local charlyLost = charly and not charly:getLocation()
+    if placementDead or charlyLost then
+        charlyPlacement = WorldUtils:acquirePlacement(
+            MissionUtils:alleyPlacementRules()
+        )
+        if charlyPlacement then
+            if charly then
+                ActorUtils:placeActorAtPlacement("NPC", "NPC.MISSION_CHARLY_COMBAT", charlyPlacement, charly.iid)
+            else
+                charly = ActorUtils:placeActorAtPlacement("NPC", "NPC.MISSION_CHARLY_COMBAT", charlyPlacement)
+                charly.memory.GiftAndTheGrain_Bar = bar
+                MissionUtils:setEntryPoint(charly, "TheGiftAndTheGrain2_Start")
+                addPOI(charly)
+            end
+        end
+    end
     return fact.GiftAndTheGrain_TalkedToCharly or attackedCharly
 end
 
@@ -301,7 +347,15 @@ function TalkToCharlyDone()
     elseif fact.GiftAndTheGrain_TalkedToCharly == 1 then
         contractor = ActorUtils:placeActorAtPlacement("NPC", "NPC.BASE_MISSION_MALE_NON_COMBAT_08", barPlacement)
         contractor.name = "$Contractor_name" --$ Contractor
-        contractor.memory.GiftAndTheGrain_CharlyLocationName = WorldUtils:getLocationFromId(charlyPlacement.locationId).name
+        -- MEGAMOD: guard the placement ref; fall back to Charly's live location
+        local charlyLocation
+        if charlyPlacement and charlyPlacement.locationId and charlyPlacement.locationId ~= 0 then
+            charlyLocation = WorldUtils:getLocationFromId(charlyPlacement.locationId)
+        end
+        if not charlyLocation and charly then
+            charlyLocation = charly:getLocation()
+        end
+        contractor.memory.GiftAndTheGrain_CharlyLocationName = charlyLocation and charlyLocation.name or ""
         MissionUtils:setEntryPoint(contractor, "TheGiftAndTheGrain3_Start")
         contractor:addState("GuardIfFlee")
         addObjective("TalkToContractor")
