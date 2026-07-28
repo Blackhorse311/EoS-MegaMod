@@ -220,6 +220,7 @@ Everything beyond the merge — the safehouse crew, world events, Event Director
 
 ## Support
 
+- 📦 **Also on Nexus Mods:** [nexusmods.com/empireofsin/mods/2](https://www.nexusmods.com/empireofsin/mods/2)
 - 🐛 **Bug reports:** [open an issue](../../issues/new) — include your `player.log` if you can.
 - 💡 **Feature requests:** [open an issue](../../issues/new) and tag it as an enhancement.
 - 💬 Questions welcome in the issues too — there's no dumb question about a 1920s crime sim's Lua internals.
